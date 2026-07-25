@@ -1,0 +1,29 @@
+name = "agentic-template"
+main = "src/index.ts"
+compatibility_date = "2025-07-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Use --env="" for top-level production deploy when staging block exists.
+
+[assets]
+binding = "ASSETS"
+directory = "../web/dist"
+not_found_handling = "single-page-application"
+# Worker always runs first; non-API paths are forwarded to ASSETS in src/index.ts.
+run_worker_first = true
+
+[observability]
+enabled = true
+
+[vars]
+APP_ENV = "production"
+
+[env.staging]
+name = "agentic-template-staging"
+vars = { APP_ENV = "staging" }
+
+[env.staging.assets]
+binding = "ASSETS"
+directory = "../web/dist"
+not_found_handling = "single-page-application"
+run_worker_first = true

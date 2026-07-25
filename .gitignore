@@ -7,3 +7,7 @@ dist/
 .DS_Store
 coverage/
 .vite/
+*.tsbuildinfo
+.scratch/
+apps/api/.mf/
+.dev.vars

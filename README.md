@@ -71,12 +71,31 @@ bun install
 bun run check
 bun run test
 bun run build
-bun run dev          # local API + web
-bun run deploy       # requires `wrangler login`
+bun run size-limit
+bun run dev            # wrangler dev (API + static assets)
+bun run deploy         # requires `wrangler login`
+bun run deploy:temp    # temporary CF preview (no login)
 ```
+
+Verified live (temporary preview):  
+`https://agentic-template.candied-generation.workers.dev`  
+- `GET /v1/health` → `{"status":"ok","message":"Hello World",...}`  
+- `GET /` → Hello World PWA (en + id)
 
 ## Prerequisites
 
 - Bun
-- Cloudflare account + `wrangler login` (for deploy)
+- Cloudflare account + `wrangler login` (persistent deploy), or `deploy:temp` for preview
 - Optional: Nix (`nix develop`) for a pinned shell
+
+## Skill validation (Hello World pass)
+
+| Skill | Status |
+|---|---|
+| bootstrap-project | **Removed** — monorepo is the template |
+| guided-implementation | OK — contracts → tests → impl; gates use `bun run *` |
+| writing-tests | OK — unit + property + coverage >80% |
+| plan-review / grill / to-spec / to-tickets | OK — unchanged process skills |
+| ship | OK process; needs login for non-temp promote |
+| payment-integration | OK — points at AGENTS.md Payments |
+| code-review / pr-creation | OK — DoD matches root scripts |

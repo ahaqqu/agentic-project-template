@@ -1,0 +1,36 @@
+{
+  "name": "agentic-project-template",
+  "private": true,
+  "type": "module",
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "dev": "bun run --filter @app/api dev",
+    "build": "bun run --filter @app/web build && bun run --filter @app/api build",
+    "check": "tsc -p tsconfig.json && bun run --filter @app/api check && bun run --filter @app/web check",
+    "test": "vitest run --coverage",
+    "size-limit": "size-limit",
+    "e2e": "echo 'e2e: add Playwright-BDD scenarios per feature'",
+    "deploy": "bun run build && wrangler deploy -c apps/api/wrangler.toml --env=\"\"",
+    "deploy:staging": "bun run build && wrangler deploy -c apps/api/wrangler.toml --env staging",
+    "deploy:temp": "bun run build && wrangler deploy -c apps/api/wrangler.toml --env=\"\" --temporary"
+  },
+  "devDependencies": {
+    "@fast-check/vitest": "0.4.1",
+    "@size-limit/file": "13.0.1",
+    "@types/node": "26.1.1",
+    "@vitest/coverage-v8": "4.1.10",
+    "fast-check": "4.9.0",
+    "size-limit": "13.0.1",
+    "typescript": "5.9.3",
+    "vitest": "4.1.10",
+    "wrangler": "4.114.0"
+  },
+  "size-limit": [
+    {
+      "name": "web-js",
+      "path": "apps/web/dist/assets/*.js",
+      "limit": "200 KB",
+      "gzip": true
+    }
+  ]
+}

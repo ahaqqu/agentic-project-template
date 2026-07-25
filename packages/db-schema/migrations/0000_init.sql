@@ -1,0 +1,5 @@
+CREATE TABLE IF NOT EXISTS greetings (
+  id TEXT PRIMARY KEY NOT NULL,
+  message TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
