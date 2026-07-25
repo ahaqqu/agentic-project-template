@@ -67,7 +67,8 @@ The skills form a complete development pipeline. **[auto]** fires on its own whe
        ▼
   to-tickets [you]
        │
-       ▼
+       ▼  (you pick which ticket to implement)
+       │
 guided-implementation [auto]
        │
        ▼
