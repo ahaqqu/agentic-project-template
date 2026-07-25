@@ -32,20 +32,23 @@ For each principle in `docs/ARCHITECTURE.md`, check if the PR upholds or violate
 
 ## Guardrail compliance
 
-For each changed file, verify against `AGENTS.md`:
+For each changed file, verify against `AGENTS.md` universal guardrails and the `guided-implementation` domain checklist:
 
 - External service access uses adapters in `packages/infra`. No direct `env.*` access.
 - Routes have Zod schemas in `packages/shared-zod`, use `@hono/zod-openapi`, and are under `/v1/`.
+- Database changes include Drizzle migrations, client migrations, and `SCHEMA_VERSION` bump.
 - User-facing strings are externalized for `en` and `id`. No hardcoded copy.
 - Dates, numbers, and currency use the `Intl` API.
 - Styling uses Tailwind CSS only. No runtime CSS-in-JS.
 - Sync logic uses Tinybase MergeableStore CRDT. No hand-rolled last-write-wins.
+- Sync retries with exponential backoff; requests carry `schemaVersion` and `clientVersion`.
 - Logging uses the Logger adapter with structured JSON. No `console.log`.
 - SQL uses only standard features. No SQLite-specific or D1-specific extensions.
 - Session storage uses D1. No KV write-path.
 - Dependencies are free-tier compatible. No paid services in the critical path.
 - Secrets are injected via `wrangler secret`. Nothing committed to the repo.
 - Files are 300 lines or fewer with 5 or fewer direct dependencies.
+- Webhook handlers verify signatures before parsing; are idempotent.
 
 ## Output
 
