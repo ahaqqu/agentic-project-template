@@ -67,6 +67,7 @@ Agent skills for autonomous development — load them via the skill tool.
 | `code-review` | Review PRs for philosophy and guardrail compliance |
 | `diagnosing-bugs` | Tight feedback-loop-first debugging |
 | `pr-creation` | Create PRs with validated DoD |
+| `ship` | Deploy to staging, run validation gates, promote to production |
 | `payment-integration` | Payment flows, webhooks, entitlements |
 | `writing-great-skills` | Reference for writing effective agent skills |
 
