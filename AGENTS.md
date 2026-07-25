@@ -16,9 +16,9 @@ These apply regardless of whether you are planning, implementing, reviewing, or 
 
 ## Prior to implementation
 
-See `.agents/skills/plan-review/SKILL.md` — validate your plan against architecture before writing code.
-
 See `.agents/skills/grill-with-docs/SKILL.md` — sharpen designs through structured interview; produce ADRs and glossary.
+
+See `.agents/skills/plan-review/SKILL.md` — validate your plan against architecture before writing code.
 
 ## During implementation
 
@@ -37,7 +37,7 @@ See `.agents/skills/writing-tests/SKILL.md` — unit, property, BDD, and integra
 
 See `.agents/skills/code-review/SKILL.md` — verify changes against philosophy and guardrails before creating a PR.
 
-See `.agents/skills/ship/SKILL.md` — staging → BDD → DAST → fuzz → production → smoke tests.
+See `.agents/skills/ship/SKILL.md` — staging → tests → production → smoke tests.
 
 ## Troubleshooting
 

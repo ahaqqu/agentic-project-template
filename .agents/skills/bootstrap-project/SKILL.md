@@ -349,7 +349,3 @@ Create the minimum viable entry points:
 - [ ] All four CI workflow files exist and reference the correct `nix develop` prefix.
 - [ ] `flake.nix` produces a shell where `bun --version`, `node --version`, and `wrangler --version` all work.
 - [ ] Agent can proceed to guided-implementation without touching scaffolding.
-
-## Handoff
-
-After scaffold is complete, load `plan-review` to validate the project against architecture before implementation begins.

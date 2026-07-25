@@ -372,7 +372,3 @@ Tests are done when:
 - [ ] Property tests for webhook handlers assert idempotency on random payloads.
 - [ ] BDD scenarios exist for every new user-facing flow, including offline and error states.
 - [ ] `vp test` passes with coverage above 80% on changed files.
-
-## Handoff
-
-After tests pass with >80% coverage, load `pr-creation` to create the pull request.

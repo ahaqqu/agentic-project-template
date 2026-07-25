@@ -1,11 +1,11 @@
 ---
 name: plan-review
-description: Use when creating, reviewing, or validating a plan against architecture. Read docs/ARCHITECTURE.md for philosophy and rationale.
+description: Use when reviewing a proposed plan or validating that an existing plan aligns with architecture. Read docs/ARCHITECTURE.md for philosophy and rationale.
 ---
 
 # Plan & Review
 
-Use this skill when creating a plan, reviewing a proposed plan, or validating that an existing plan aligns with architecture.
+Use this skill when reviewing a proposed plan or validating that an existing plan aligns with architecture.
 
 ## Inputs
 
