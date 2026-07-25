@@ -1,6 +1,7 @@
 ---
 name: ship
-description: Use when deploying to staging, running pre-prod validation (BDD, DAST, fuzz), promoting to production, or handling rollbacks. Read docs/ARCHITECTURE.md §6 for security scanning gates.
+description: Use when deploying to staging, running pre-prod validation, promoting to production, or handling rollbacks. CI (GitHub Actions) runs DAST, fuzz, and smoke — this skill guides manual intervention.
+disable-model-invocation: true
 ---
 
 # Ship — Deploy & Validate

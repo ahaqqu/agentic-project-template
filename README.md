@@ -80,7 +80,7 @@ guided-implementation [auto]
    code-review [auto] (fires on PR creation)
        │
        ▼
-     ship [auto]  ◄── DAST, fuzz, smoke
+     ship [you]  ◄── DAST, fuzz, smoke (GitHub Actions)
        │
        ▼
    production
@@ -105,7 +105,7 @@ Any step can branch to:
 | `code-review` | auto | Review PRs for philosophy and guardrail compliance |
 | `diagnosing-bugs` | auto | Tight feedback-loop-first debugging |
 | `pr-creation` | auto | Create PRs with validated DoD |
-| `ship` | auto | Deploy to staging, run validation gates, promote to production |
+| `ship` | you | Deploy to staging, validate gates, promote to production |
 | `payment-integration` | auto | Payment flows, webhooks, entitlements |
 | `writing-great-skills` | you | Reference for writing effective agent skills |
 
