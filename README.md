@@ -51,9 +51,44 @@ Each principle is enforced by an automated CI gate. See `docs/ARCHITECTURE.md` f
 | Dev env | Nix Flakes |
 | Tooling | Vite+ (`vp` task runner) |
 
-## Skills
+## Skill flow
 
-Agent skills for autonomous development — load them via the skill tool.
+The skills form a complete development pipeline from zero to production:
+
+```
+bootstrap-project
+      │
+      ▼
+  plan-review  ──►  grill-with-docs
+      │                    │
+      ▼                    ▼
+   to-spec               adr/
+      │
+      ▼
+  to-tickets
+      │
+      ▼
+guided-implementation  ──►  writing-tests
+      │                         │
+      ▼                         ▼
+  code-review               vitest/fast-check/BDD
+      │
+      ▼
+  pr-creation
+      │
+      ▼
+     ship  ◄── DAST, fuzz, smoke
+      │
+      ▼
+  production
+
+Any step can branch to:
+  diagnosing-bugs       (find + fix bugs)
+  payment-integration   (payments/webhooks)
+  writing-great-skills  (improve skills themselves)
+```
+
+## Skill index
 
 | Skill | Purpose |
 |---|---|
