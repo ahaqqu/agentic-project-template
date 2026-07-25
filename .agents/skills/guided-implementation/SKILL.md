@@ -90,3 +90,4 @@ For each area the plan touches, verify compliance before writing code.
 - Run the project CI gate locally: `vp check && vp test && vp size-limit`. `vp` is the Vite+ task runner; run `vp help` if the command format differs. If no `vp` binary is available, see `docs/ARCHITECTURE.md` §14 for tooling to scaffold.
 - Verify against `AGENTS.md` Definition of Done.
 - Report what was implemented and what changed from the plan.
+- **Handoff:** load `writing-tests` to add any missing unit, property, and BDD coverage. After tests pass with >80% coverage, load `pr-creation` to create the pull request.

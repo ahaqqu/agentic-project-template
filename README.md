@@ -68,13 +68,16 @@ The skills form a complete development pipeline. **[auto]** fires on its own whe
   to-tickets [you]
        │
        ▼
-guided-implementation [auto] ──► writing-tests [auto]
-       │                               │
-       ▼                               ▼
-  code-review [auto]             vitest/fast-check/BDD
+guided-implementation [auto]
+       │
+       ▼
+ writing-tests [auto]
        │
        ▼
   pr-creation [auto]
+       │
+       ▼
+   code-review [auto] (fires on PR creation)
        │
        ▼
      ship [auto]  ◄── DAST, fuzz, smoke
