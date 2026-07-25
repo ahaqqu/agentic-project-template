@@ -57,11 +57,13 @@ Agent skills for autonomous development — load them via the skill tool.
 
 | Skill | Purpose |
 |---|---|
+| `bootstrap-project` | Scaffold the full monorepo, flake.nix, CI, and tooling from scratch |
 | `plan-review` | Validate plans against architecture |
 | `grill-with-docs` | Interview to sharpen designs; produce ADRs and glossary |
 | `to-spec` | Synthesize conversation into a published spec |
 | `to-tickets` | Break specs into tracer-bullet tickets |
 | `guided-implementation` | Implement a plan with guardrail checks |
+| `writing-tests` | Write unit, property, BDD, and integration tests |
 | `code-review` | Review PRs for philosophy and guardrail compliance |
 | `diagnosing-bugs` | Tight feedback-loop-first debugging |
 | `pr-creation` | Create PRs with validated DoD |

@@ -23,7 +23,8 @@ Task guardrails for AI agents. Read before implementation. For philosophy and ra
 - When changing the database schema, you MUST write a Drizzle migration in `packages/db-schema/migrations/`.
 - When changing the database schema, you MUST write a client migration in `apps/web/src/lib/migrations/`.
 - When changing the database schema, you MUST bump `SCHEMA_VERSION` in `packages/sync-protocol`.
-- When changing merge logic, you MUST add property tests for idempotency, commutativity, and delete propagation.
+- When changing merge logic, you MUST add property tests for idempotency, commutativity, and delete propagation. See `.agents/skills/writing-tests/SKILL.md` for patterns.
+- When writing tests, you MUST follow the patterns in `.agents/skills/writing-tests/SKILL.md`. Use Vitest for unit tests, fast-check for property tests, and Playwright-BDD for user-facing flows.
 
 ## Components
 
