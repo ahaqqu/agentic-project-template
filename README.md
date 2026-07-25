@@ -53,58 +53,58 @@ Each principle is enforced by an automated CI gate. See `docs/ARCHITECTURE.md` f
 
 ## Skill flow
 
-The skills form a complete development pipeline from zero to production:
+The skills form a complete development pipeline. **[auto]** fires on its own when the agent detects a match; **[you]** must be manually invoked by the human.
 
 ```
-bootstrap-project
-      │
-      ▼
-  plan-review  ──►  grill-with-docs
-      │                    │
-      ▼                    ▼
-   to-spec               adr/
-      │
-      ▼
-  to-tickets
-      │
-      ▼
-guided-implementation  ──►  writing-tests
-      │                         │
-      ▼                         ▼
-  code-review               vitest/fast-check/BDD
-      │
-      ▼
-  pr-creation
-      │
-      ▼
-     ship  ◄── DAST, fuzz, smoke
-      │
-      ▼
-  production
+ bootstrap-project [auto]
+       │
+       ▼
+   plan-review [auto] ──► grill-with-docs [you]
+       │                         │
+       ▼                         ▼
+    to-spec [you]              adr/
+       │
+       ▼
+  to-tickets [you]
+       │
+       ▼
+guided-implementation [auto] ──► writing-tests [auto]
+       │                               │
+       ▼                               ▼
+  code-review [auto]             vitest/fast-check/BDD
+       │
+       ▼
+  pr-creation [auto]
+       │
+       ▼
+     ship [auto]  ◄── DAST, fuzz, smoke
+       │
+       ▼
+   production
 
 Any step can branch to:
-  diagnosing-bugs       (find + fix bugs)
-  payment-integration   (payments/webhooks)
-  writing-great-skills  (improve skills themselves)
+  diagnosing-bugs [auto]       (find + fix bugs)
+  payment-integration [auto]   (payments/webhooks)
+  writing-great-skills [you]   (improve skills themselves)
 ```
 
 ## Skill index
 
-| Skill | Purpose |
-|---|---|
-| `bootstrap-project` | Scaffold the full monorepo, flake.nix, CI, and tooling from scratch |
-| `plan-review` | Validate plans against architecture |
-| `grill-with-docs` | Interview to sharpen designs; produce ADRs and glossary |
-| `to-spec` | Synthesize conversation into a published spec |
-| `to-tickets` | Break specs into tracer-bullet tickets |
-| `guided-implementation` | Implement a plan with guardrail checks |
-| `writing-tests` | Write unit, property, BDD, and integration tests |
-| `code-review` | Review PRs for philosophy and guardrail compliance |
-| `diagnosing-bugs` | Tight feedback-loop-first debugging |
-| `pr-creation` | Create PRs with validated DoD |
-| `ship` | Deploy to staging, run validation gates, promote to production |
-| `payment-integration` | Payment flows, webhooks, entitlements |
-| `writing-great-skills` | Reference for writing effective agent skills |
+| Skill | Invoke | Purpose |
+|---|---|---|---|
+| `bootstrap-project` | auto | Scaffold the full monorepo, flake.nix, CI, and tooling from scratch |
+| `plan-review` | auto | Validate plans against architecture |
+| `grill-with-docs` | you | Interview to sharpen designs; produce ADRs and glossary |
+| `to-spec` | you | Synthesize conversation into a published spec |
+| `to-tickets` | you | Break specs into tracer-bullet tickets |
+| `guided-implementation` | auto | Implement a plan with guardrail checks |
+| `writing-tests` | auto | Write unit, property, BDD, and integration tests |
+| `code-review` | auto | Review PRs for philosophy and guardrail compliance |
+| `diagnosing-bugs` | auto | Tight feedback-loop-first debugging |
+| `pr-creation` | auto | Create PRs with validated DoD |
+| `ship` | auto | Deploy to staging, run validation gates, promote to production |
+| `payment-integration` | auto | Payment flows, webhooks, entitlements |
+| `writing-great-skills` | you | Reference for writing effective agent skills |
 
 ## Prerequisites
 
