@@ -1,0 +1,26 @@
+name: Deploy production
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run build
+      - run: bunx wrangler d1 migrations apply agentic-template-db --remote -c apps/api/wrangler.toml
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - run: bun run deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - name: Smoke
+        run: |
+          curl -sf "$PROD_URL/v1/health" | grep -q '"status":"ok"'
+          curl -sf -X POST "$PROD_URL/v1/auth/anonymous" | grep -q userId
+        env:
+          PROD_URL: ${{ vars.PROD_URL }}

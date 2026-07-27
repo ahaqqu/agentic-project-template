@@ -1,15 +1,10 @@
-import { createMergeableStore, type MergeableStore } from "tinybase";
+/** @deprecated use notes-store — kept for health greeting seed */
 import { SCHEMA_VERSION } from "@app/sync-protocol";
 
-let store: MergeableStore | null = null;
+export function getGreeting(): string {
+  return "Hello World";
+}
 
-export function getStore(): MergeableStore {
-  if (!store) {
-    store = createMergeableStore();
-    store.setValues({
-      schemaVersion: SCHEMA_VERSION,
-      greeting: "Hello World",
-    });
-  }
-  return store;
+export function getSchemaVersion(): number {
+  return SCHEMA_VERSION;
 }

@@ -1,12 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { getStore } from "./store";
+import { getGreeting, getSchemaVersion } from "./store";
 
-describe("getStore", () => {
-  it("returns singleton with schema and greeting", () => {
-    const a = getStore();
-    const b = getStore();
-    expect(a).toBe(b);
-    expect(a.getValue("schemaVersion")).toBe(1);
-    expect(a.getValue("greeting")).toBe("Hello World");
+describe("store helpers", () => {
+  it("greeting and schema", () => {
+    expect(getGreeting()).toBe("Hello World");
+    expect(getSchemaVersion()).toBe(2);
   });
 });

@@ -17,3 +17,17 @@ jobs:
       - run: bun run test
       - run: bun run build
       - run: bun run size-limit
+      - run: bun run agentic-limits
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: OSV-Scanner
+        uses: google/osv-scanner-action/osv-scanner-action@v2.0.1
+        with:
+          scan-args: |-
+            --lockfile=bun.lock
+      - name: Semgrep
+        uses: semgrep/semgrep-action@v1
+        with:
+          config: auto

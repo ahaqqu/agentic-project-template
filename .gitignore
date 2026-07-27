@@ -1,6 +1,11 @@
 node_modules/
 .wrangler/
+apps/*/.wrangler/
 dist/
+.features-gen/
+test-results/
+playwright-report/
+blob-report/
 .env
 .env.local
 *.log
@@ -11,3 +16,7 @@ coverage/
 .scratch/
 apps/api/.mf/
 .dev.vars
+.features-gen/
+test-results/
+playwright-report/
+blob-report/

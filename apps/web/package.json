@@ -16,7 +16,8 @@
     "@tanstack/react-router": "1.170.18",
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "tinybase": "9.2.0"
+    "tinybase": "9.2.0",
+    "workbox-window": "^7.4.1"
   },
   "devDependencies": {
     "@tailwindcss/vite": "4.3.3",

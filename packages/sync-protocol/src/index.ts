@@ -1,2 +1,2 @@
-export { SCHEMA_VERSION } from "./version";
-export { mergeRows, type Row } from "./merge";
+export { SCHEMA_VERSION, CLIENT_VERSION } from "./version";
+export { mergeNotes, aliveNotes, type NoteRow } from "./merge";

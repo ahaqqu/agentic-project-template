@@ -1,1 +1,1 @@
-export { greetings } from "./schema";
+export { users, sessions, notes, rateLimits } from "./schema";

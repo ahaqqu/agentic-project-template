@@ -3,8 +3,8 @@ import { formatWhen, t } from "./i18n";
 
 describe("i18n", () => {
   it("returns en and id strings", () => {
-    expect(t("en", "title")).toBe("Hello World");
-    expect(t("id", "title")).toBe("Halo Dunia");
+    expect(t("en", "homeTitle")).toBe("Hello World");
+    expect(t("id", "homeTitle")).toBe("Halo Dunia");
   });
 
   it("formats dates via Intl", () => {

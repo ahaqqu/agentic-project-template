@@ -1,13 +1,14 @@
-export type Row = {
+export type NoteRow = {
   id: string;
   title: string;
-  done: boolean;
+  body: string;
+  updatedAt: number;
   deleted?: boolean | undefined;
 };
 
-/** Deterministic merge: last non-deleted wins by id; delete always wins. */
-export function mergeRows(a: Row[], b: Row[]): Row[] {
-  const map = new Map<string, Row>();
+/** LWW by updatedAt; delete always wins once seen. */
+export function mergeNotes(a: NoteRow[], b: NoteRow[]): NoteRow[] {
+  const map = new Map<string, NoteRow>();
   for (const row of [...a, ...b]) {
     const prev = map.get(row.id);
     if (!prev) {
@@ -15,10 +16,15 @@ export function mergeRows(a: Row[], b: Row[]): Row[] {
       continue;
     }
     if (row.deleted || prev.deleted) {
-      map.set(row.id, { ...row, ...prev, deleted: true, done: false });
+      const newer = row.updatedAt >= prev.updatedAt ? row : prev;
+      map.set(row.id, { ...newer, deleted: true });
       continue;
     }
-    map.set(row.id, row);
+    map.set(row.id, row.updatedAt >= prev.updatedAt ? row : prev);
   }
-  return [...map.values()].filter((r) => !r.deleted);
+  return [...map.values()];
+}
+
+export function aliveNotes(rows: NoteRow[]): NoteRow[] {
+  return rows.filter((r) => !r.deleted);
 }

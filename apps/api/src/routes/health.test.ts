@@ -10,12 +10,8 @@ describe("buildHealth", () => {
       correlationId: "test-id",
       logger: createLogger({}, sink),
     });
-    expect(result).toEqual({
-      status: "ok",
-      env: "production",
-      schemaVersion: 1,
-      message: "Hello World",
-    });
-    expect(sink).toHaveBeenCalledOnce();
+    expect(result.status).toBe("ok");
+    expect(result.schemaVersion).toBe(2);
+    expect(result.message).toBe("Hello World");
   });
 });

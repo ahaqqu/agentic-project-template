@@ -1,20 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { mergeRows } from "./merge";
+import { aliveNotes, mergeNotes } from "./merge";
 
-describe("mergeRows", () => {
-  it("merges by id", () => {
-    const result = mergeRows(
-      [{ id: "a", title: "one", done: false }],
-      [{ id: "b", title: "two", done: true }],
+describe("mergeNotes", () => {
+  it("keeps newer updatedAt", () => {
+    const r = mergeNotes(
+      [{ id: "a", title: "old", body: "", updatedAt: 1 }],
+      [{ id: "a", title: "new", body: "", updatedAt: 2 }],
     );
-    expect(result).toHaveLength(2);
+    expect(r[0]?.title).toBe("new");
   });
 
-  it("filters deleted", () => {
-    const result = mergeRows(
-      [{ id: "a", title: "one", done: false }],
-      [{ id: "a", title: "one", done: false, deleted: true }],
+  it("delete wins", () => {
+    const r = mergeNotes(
+      [{ id: "a", title: "x", body: "", updatedAt: 2 }],
+      [{ id: "a", title: "x", body: "", updatedAt: 1, deleted: true }],
     );
-    expect(result).toHaveLength(0);
+    expect(aliveNotes(r)).toHaveLength(0);
   });
 });
