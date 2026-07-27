@@ -17,6 +17,9 @@
     "deploy:temp": "bun run build && wrangler deploy -c apps/api/wrangler.toml --env=\"\" --temporary",
     "db:migrate:local": "wrangler d1 migrations apply agentic-template-db --local -c apps/api/wrangler.toml"
   },
+  "overrides": {
+    "brace-expansion": "5.0.8"
+  },
   "devDependencies": {
     "@axe-core/playwright": "4.12.1",
     "@fast-check/vitest": "0.4.1",
@@ -38,5 +41,8 @@
       "limit": "200 KB",
       "gzip": true
     }
-  ]
+  ],
+  "dependencies": {
+    "brace-expansion": "^5.0.8"
+  }
 }
