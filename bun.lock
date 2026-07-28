@@ -24,8 +24,8 @@
       "version": "0.0.1",
       "dependencies": {
         "@app/infra": "workspace:*",
+        "@app/local-first": "workspace:*",
         "@app/shared-zod": "workspace:*",
-        "@app/sync-protocol": "workspace:*",
         "@sentry/cloudflare": "10.68.0",
         "hono": "4.12.32",
         "zod": "4.4.3",
@@ -40,8 +40,8 @@
       "name": "@app/web",
       "version": "0.0.1",
       "dependencies": {
+        "@app/local-first": "workspace:*",
         "@app/shared-zod": "workspace:*",
-        "@app/sync-protocol": "workspace:*",
         "@sentry/react": "10.68.0",
         "@tanstack/react-query": "5.101.4",
         "@tanstack/react-router": "1.170.18",
@@ -66,21 +66,21 @@
         "typescript": "5.9.3",
       },
     },
-    "packages/shared-zod": {
-      "name": "@app/shared-zod",
+    "packages/local-first": {
+      "name": "@app/local-first",
       "version": "0.0.1",
       "dependencies": {
-        "zod": "4.4.3",
+        "@app/shared-zod": "workspace:*",
       },
       "devDependencies": {
         "typescript": "5.9.3",
       },
     },
-    "packages/sync-protocol": {
-      "name": "@app/sync-protocol",
+    "packages/shared-zod": {
+      "name": "@app/shared-zod",
       "version": "0.0.1",
       "dependencies": {
-        "@app/shared-zod": "workspace:*",
+        "zod": "4.4.3",
       },
       "devDependencies": {
         "typescript": "5.9.3",
@@ -103,9 +103,9 @@
 
     "@app/infra": ["@app/infra@workspace:packages/infra"],
 
-    "@app/shared-zod": ["@app/shared-zod@workspace:packages/shared-zod"],
+    "@app/local-first": ["@app/local-first@workspace:packages/local-first"],
 
-    "@app/sync-protocol": ["@app/sync-protocol@workspace:packages/sync-protocol"],
+    "@app/shared-zod": ["@app/shared-zod@workspace:packages/shared-zod"],
 
     "@app/web": ["@app/web@workspace:apps/web"],
 

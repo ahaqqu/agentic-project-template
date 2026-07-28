@@ -9,7 +9,7 @@ Working full-stack starter for AI-assisted product development: Cloudflare Worke
 | Goal | How |
 |---|---|
 | Cheap | Cloudflare free tier |
-| Offline-first | Tinybase-style merge + IndexedDB + batched `/v1/sync` |
+| Offline-first | LWW merge (`@app/local-first`) + IndexedDB + batched `/v1/sync` |
 | Fast | Bundle &lt;200 KB gzip; PWA |
 | Agent-ready | Zod contracts, adapters, ≤300-line files, skill pipeline |
 | Quality | Unit, property, BDD, size-limit, security CI |

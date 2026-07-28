@@ -120,7 +120,7 @@ Gated by: `bun run check` (lint + typecheck) and `bun run test` (coverage > 80%)
 
 ### Versioning and client lifecycle
 
-All API routes are under `/v1/`. The Service Worker uses versioned precache with an update-prompt flow so users are never stranded on stale clients. Client migrations run before the store loads, governed by `SCHEMA_VERSION` in `packages/sync-protocol`.
+All API routes are under `/v1/`. The Service Worker uses versioned precache with an update-prompt flow so users are never stranded on stale clients. Client migrations run before the store loads, governed by `SCHEMA_VERSION` in `packages/local-first`.
 
 ### Monorepo layout
 
@@ -130,7 +130,7 @@ All API routes are under `/v1/`. The Service Worker uses versioned precache with
 │   ├── web/                    # React 19 PWA
 │   │   ├── src/routes/         # File-based routes
 │   │   ├── src/components/     # UI components
-│   │   ├── src/lib/            # MergeableStore, sync, i18n, migrations
+│   │   ├── src/lib/            # Local notes store (IndexedDB), session, i18n
 │   │   └── public/             # manifest, icons
 │   └── api/                    # Hono Worker (also serves web assets)
 │       ├── src/routes/         # /v1/* route handlers
@@ -139,7 +139,7 @@ All API routes are under `/v1/`. The Service Worker uses versioned precache with
 ├── packages/
 │   ├── shared-zod/             # Client ↔ server contracts
 │   ├── db-schema/              # Drizzle schema + migrations
-│   ├── sync-protocol/          # Sync types, SCHEMA_VERSION, merge helpers
+│   ├── local-first/            # LWW CRDT, SCHEMA_VERSION, note mapping; /client: sync loop, leader, migrations
 │   └── infra/                  # Adapters: ObjectStore, ConfigStore, Cache, JobScheduler, Logger
 ├── .github/workflows/
 │   ├── ci.yml                  # PR gate
@@ -222,7 +222,7 @@ Gated by: lint rules for file size (300 lines max) and dependency count (5 direc
 | Config | D1-backed ConfigStore | Feature flags and runtime config. |
 | Jobs | Cron Triggers via JobScheduler | Swappable for node-cron in non-Worker environments. |
 | Payments | Xendit + Polar MoR | Single adapter interface. Per-transaction fees only. |
-| Client state | Tinybase MergeableStore | CRDT merge. Only source of truth. |
+| Client state | Custom LWW CRDT (`@app/local-first`) | Per-record LWW-element-set + tombstones. Only source of truth. |
 | Routing | TanStack Router | File-based, type-safe. |
 | Transport | TanStack Query | Retries, dedupe, offline persistence. Not a state layer. |
 | UI | shadcn/ui + Tailwind | Owned source, Radix accessibility, build-time only CSS. |

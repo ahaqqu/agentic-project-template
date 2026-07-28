@@ -11,7 +11,7 @@ export default defineConfig({
       reporter: ["text", "json-summary"],
       include: [
         "packages/shared-zod/src/**/*.ts",
-        "packages/sync-protocol/src/**/*.ts",
+        "packages/local-first/src/**/*.ts",
         "packages/infra/src/**/*.ts",
         "apps/api/src/env.ts",
         "apps/api/src/routes/**/*.ts",
@@ -25,8 +25,6 @@ export default defineConfig({
         "apps/web/src/lib/health.ts",
         "apps/web/src/lib/sentry.ts",
         "apps/web/src/lib/session.ts",
-        "apps/web/src/lib/persist.ts",
-        "apps/web/src/lib/migrations.ts",
       ],
       exclude: ["**/*.{test,prop.test}.ts", "**/index.ts", "**/*.d.ts"],
       thresholds: {

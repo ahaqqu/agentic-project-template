@@ -14,7 +14,7 @@ test.prop([
     { maxLength: 15 },
   ),
 ])("migration round-trip preserves notes", (notes) => {
-  const v1 = { schemaVersion: 1 as const, notes };
+  const v1 = { schemaVersion: 1, notes };
   const v2 = migrateV1ToV2(v1);
   const back = migrateDownV2ToV1(v2);
   expect(back.notes).toEqual(notes);
