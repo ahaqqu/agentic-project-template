@@ -10,11 +10,10 @@
     "deploy": "wrangler deploy -c wrangler.toml --env=\"\""
   },
   "dependencies": {
-    "@app/db-schema": "workspace:*",
     "@app/infra": "workspace:*",
     "@app/shared-zod": "workspace:*",
     "@app/sync-protocol": "workspace:*",
-    "@hono/zod-openapi": "1.5.1",
+    "@sentry/cloudflare": "10.68.0",
     "hono": "4.12.32",
     "zod": "4.4.3"
   },

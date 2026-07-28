@@ -3,8 +3,11 @@ import { RouterProvider } from "@tanstack/react-router";
 import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { requestPersistentStorage } from "./lib/persist";
+import { initSentry } from "./lib/sentry";
 import { router } from "./router";
 import "./styles.css";
+
+initSentry(import.meta.env.VITE_SENTRY_DSN);
 
 const queryClient = new QueryClient({
   defaultOptions: {

@@ -41,8 +41,5 @@
       "limit": "200 KB",
       "gzip": true
     }
-  ],
-  "dependencies": {
-    "brace-expansion": "^5.0.8"
-  }
+  ]
 }
