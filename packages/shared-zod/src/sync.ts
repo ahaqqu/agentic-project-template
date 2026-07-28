@@ -11,6 +11,7 @@ export type SyncRequest = z.infer<typeof SyncRequestSchema>;
 
 export const SyncResponseSchema = z.object({
   schemaVersion: z.number().int().positive(),
+  serverNow: z.number().int().nonnegative(),
   notes: z.array(NoteSchema),
 });
 

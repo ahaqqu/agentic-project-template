@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import type { Note } from "@app/shared-zod";
-import { SCHEMA_VERSION } from "@app/sync-protocol";
+import { SCHEMA_VERSION } from "@app/local-first";
+import { startSyncLoop, type SyncStatus } from "@app/local-first/client";
 import { t, type Locale } from "../lib/i18n";
 import {
   listAlive,
   loadState,
+  pushPull,
   removeNote,
   upsertNote,
   type NotesState,
@@ -14,7 +16,6 @@ import {
   ensureSession,
   loadSession,
 } from "../lib/session";
-import { startSyncLoop, type SyncStatus } from "../lib/sync-loop";
 import { Button, Card, Input, Textarea } from "./ui";
 
 export function NotesPage({ locale }: { locale: Locale }) {
@@ -38,7 +39,7 @@ export function NotesPage({ locale }: { locale: Locale }) {
       const s = await loadState();
       setState(s);
       setReady(true);
-      stop = startSyncLoop(setState, setStatus);
+      stop = startSyncLoop({ loadState, pushPull, loadSession }, setState, setStatus);
     })();
     return () => stop();
   }, []);

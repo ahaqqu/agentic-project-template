@@ -120,7 +120,7 @@ Gated by: `bun run check` (lint + typecheck) and `bun run test` (coverage > 80%)
 
 ### Versioning and client lifecycle
 
-All API routes are under `/v1/`. The Service Worker uses versioned precache with an update-prompt flow so users are never stranded on stale clients. Client migrations run before the store loads, governed by `SCHEMA_VERSION` in `packages/sync-protocol`.
+All API routes are under `/v1/`. The Service Worker uses versioned precache with an update-prompt flow so users are never stranded on stale clients. Client migrations run before the store loads, governed by `SCHEMA_VERSION` in `packages/local-first`.
 
 ### Monorepo layout
 
@@ -139,7 +139,7 @@ All API routes are under `/v1/`. The Service Worker uses versioned precache with
 ├── packages/
 │   ├── shared-zod/             # Client ↔ server contracts
 │   ├── db-schema/              # Drizzle schema + migrations
-│   ├── sync-protocol/          # Sync types, SCHEMA_VERSION, merge helpers
+│   ├── local-first/            # LWW CRDT, SCHEMA_VERSION, note mapping; /client: sync loop, leader, migrations
 │   └── infra/                  # Adapters: ObjectStore, ConfigStore, Cache, JobScheduler, Logger
 ├── .github/workflows/
 │   ├── ci.yml                  # PR gate

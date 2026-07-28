@@ -4,7 +4,7 @@ import {
   SyncRequestSchema,
   SyncResponseSchema,
 } from "@app/shared-zod";
-import { CLIENT_VERSION, SCHEMA_VERSION } from "@app/sync-protocol";
+import { CLIENT_VERSION, SCHEMA_VERSION } from "@app/local-first";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { secureHeaders } from "hono/secure-headers";
@@ -104,7 +104,11 @@ export function createApi() {
     }
     const notes = await syncNotes(db, userId, body.notes);
     return c.json(
-      SyncResponseSchema.parse({ schemaVersion: SCHEMA_VERSION, notes }),
+      SyncResponseSchema.parse({
+        schemaVersion: SCHEMA_VERSION,
+        serverNow: Date.now(),
+        notes,
+      }),
     );
   });
 

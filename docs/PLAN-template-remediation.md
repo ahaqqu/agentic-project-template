@@ -7,7 +7,7 @@ Origin: thermo-nuclear code-quality review (2026-07-28). The review's core findi
 | WS | Title | Status | PR |
 |---|---|---|---|
 | 1 | Delete the dead layer | [x] complete | [#3](https://github.com/ahaqqu/agentic-project-template/pull/3) |
-| 2 | `packages/local-first` — DIY local-first module | [ ] not started | |
+| 2 | `packages/local-first` — DIY local-first module | [x] complete | [#4](https://github.com/ahaqqu/agentic-project-template/pull/4) |
 | 3a | Valibot contracts (`@app/contracts`) | [ ] not started | |
 | 3b | hono-openapi wiring + route decomposition | [ ] not started | |
 | 4 | Gates with teeth | [ ] not started | |
@@ -81,21 +81,21 @@ These are already decided. Do not reopen them; implement them.
 
 **Tasks:**
 
-- [ ] Create `packages/local-first` (`@app/local-first`), absorbing `packages/sync-protocol` (delete it) plus client code moved out of `apps/web/src/lib/`:
+- [x] Create `packages/local-first` (`@app/local-first`), absorbing `packages/sync-protocol` (delete it) plus client code moved out of `apps/web/src/lib/`:
   - `version.ts` — `SCHEMA_VERSION`, `CLIENT_VERSION` (from sync-protocol).
   - `merge.ts` — LWW-element-set (from sync-protocol), hardened below.
   - `clock.ts` — **new**: server-bias clock discipline.
   - `tombstones.ts` — **new**: tombstone strip + GC.
-  - `note-mapper.ts` — **new**: single `NoteRow ↔ Note` mapper (canonical home; deletes the 4 copies: `apps/api/src/lib/notes-repo.ts:5-13,32-38,60-66`, `apps/web/src/lib/notes-store.ts:55-63,105-123`).
-  - `leader.ts`, `sync-loop.ts`, `persistence.ts` — moved from `apps/web/src/lib/` (client-only entrypoint, e.g. `@app/local-first/client`).
-  - `migrations.ts` — moved from `apps/web/src/lib/`; `ClientSnapshot` type unified with `NotesState` (they are identical shapes — one type).
-- [ ] **Tie-break fix (CRDT correctness):** in `merge.ts`, `updatedAt` ties currently resolve to the second argument, so `mergeNotes(a,b) ≠ mergeNotes(b,a)` on same-ms writes. Break ties deterministically (e.g., on equal `updatedAt`, keep the row whose serialized payload is lexicographically greater). Behavior unchanged except exact ties.
-- [ ] **Clock discipline:** `pushPull` currently trusts client `Date.now()`. Add: sync response carries `serverNow`; the client stores `max(Date.now(), serverNow)` as the floor for future `updatedAt` stamps (`clock.ts`). Prevents a slow/fast client clock from losing/winning every merge.
-- [ ] **Tombstones:** on delete, write empty `title`/`body` into the tombstone (stop copying payloads — `apps/web/src/lib/notes-store.ts:82-88`); after a successful `pushPull`, GC tombstones with `updatedAt` older than 30 days (they are server-acknowledged by definition of a successful sync). Document the horizon in the module readme comment.
-- [ ] **Property tests** (fast-check, extending `merge.prop.test.ts`): idempotent, commutative **including exact-timestamp ties**, associative, delete-wins, GC never resurrects or loses alive rows, mapper round-trip.
-- [ ] **Unit tests** for `leader.ts`, `sync-loop.ts`, `persistence.ts`, `clock.ts`, `tombstones.ts` (these have zero tests today).
-- [ ] Remove the impossible-state guard `snap.notes ?? []` in `migrations.ts` (field is non-optional) — or make the parsed type honest if snapshots can genuinely lack it.
-- [ ] Update `apps/web` and `apps/api` imports (`@app/sync-protocol` → `@app/local-first`); delete `packages/sync-protocol`.
+  - `note-mapper.ts` — **new**: single `NoteRow ↔ Note` mapper (canonical home; deletes the 4 copies: `apps/api/src/lib/notes-repo.ts:5-13,32-38,60-66`, `apps/web/src/lib/notes-store.ts:55-63,105-123`). *(Also adopted server-side in `notes-repo.ts` here — pre-completes WS3b's "adopt note-mapper" task.)*
+  - `leader.ts`, `sync-loop.ts`, `persistence.ts` — moved from `apps/web/src/lib/` (client-only entrypoint, e.g. `@app/local-first/client`). *(`sync-loop` takes `loadState`/`pushPull`/`loadSession` as injected deps — the package must not import back into `apps/web`.)*
+  - `migrations.ts` — moved from `apps/web/src/lib/`; `ClientSnapshot` type unified with `NotesState` (they are identical shapes — one type). *(`NotesState` survives, now lives in the package and carries optional `clockFloor`.)*
+- [x] **Tie-break fix (CRDT correctness):** in `merge.ts`, `updatedAt` ties currently resolve to the second argument, so `mergeNotes(a,b) ≠ mergeNotes(b,a)` on same-ms writes. Break ties deterministically (e.g., on equal `updatedAt`, keep the row whose serialized payload is lexicographically greater). Behavior unchanged except exact ties. *(Rows also normalize `deleted` on entry — the new idempotency property caught `deleted:false` vs `undefined` representation drift.)*
+- [x] **Clock discipline:** `pushPull` currently trusts client `Date.now()`. Add: sync response carries `serverNow`; the client stores `max(Date.now(), serverNow)` as the floor for future `updatedAt` stamps (`clock.ts`). Prevents a slow/fast client clock from losing/winning every merge. *(`SCHEMA_VERSION` not bumped: `clockFloor` is optional/additive, never on the wire; old snapshots load unchanged.)*
+- [x] **Tombstones:** on delete, write empty `title`/`body` into the tombstone (stop copying payloads — `apps/web/src/lib/notes-store.ts:82-88`); after a successful `pushPull`, GC tombstones with `updatedAt` older than 30 days (they are server-acknowledged by definition of a successful sync). Document the horizon in the module readme comment.
+- [x] **Property tests** (fast-check, extending `merge.prop.test.ts`): idempotent, commutative **including exact-timestamp ties**, associative, delete-wins, GC never resurrects or loses alive rows, mapper round-trip. *(Merge arbitraries use small id/timestamp pools to force ties.)*
+- [x] **Unit tests** for `leader.ts`, `sync-loop.ts`, `persistence.ts`, `clock.ts`, `tombstones.ts` (these have zero tests today).
+- [x] Remove the impossible-state guard `snap.notes ?? []` in `migrations.ts` (field is non-optional) — or make the parsed type honest if snapshots can genuinely lack it.
+- [x] Update `apps/web` and `apps/api` imports (`@app/sync-protocol` → `@app/local-first`); delete `packages/sync-protocol`.
 
 **Verify:** `bun run check && bun run test` green with new property/unit tests; `bun run e2e` green (offline-create scenario exercises the real loop). `rg -n "sync-protocol" --glob '!node_modules' --glob '!bun.lock'` returns nothing.
 

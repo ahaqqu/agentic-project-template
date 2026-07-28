@@ -1,14 +1,17 @@
 import { createLeaderElection } from "./leader";
-import {
-  loadState,
-  pushPull,
-  type NotesState,
-} from "./notes-store";
-import { loadSession } from "./session";
+import type { NotesState } from "./migrations";
 
 export type SyncStatus = "idle" | "syncing" | "synced" | "offline" | "error";
 
+/** Store/session seams injected by the app so the loop stays app-agnostic. */
+export type SyncLoopDeps = {
+  loadState: () => Promise<NotesState>;
+  pushPull: (state: NotesState, token: string) => Promise<NotesState>;
+  loadSession: () => { token: string } | null;
+};
+
 export function startSyncLoop(
+  deps: SyncLoopDeps,
   onState: (s: NotesState) => void,
   onStatus: (s: SyncStatus) => void,
 ): () => void {
@@ -22,12 +25,12 @@ export function startSyncLoop(
       onStatus("offline");
       return;
     }
-    const session = loadSession();
+    const session = deps.loadSession();
     if (!session) return;
     onStatus("syncing");
     try {
-      const state = await loadState();
-      const next = await pushPull(state, session.token);
+      const state = await deps.loadState();
+      const next = await deps.pushPull(state, session.token);
       onState(next);
       leader.broadcast({ type: "state", state: next });
       onStatus("synced");

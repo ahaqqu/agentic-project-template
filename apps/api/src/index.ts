@@ -4,7 +4,7 @@ import {
   createMemoryObjectStore,
   createR2ObjectStore,
 } from "@app/infra";
-import { SCHEMA_VERSION } from "@app/sync-protocol";
+import { SCHEMA_VERSION } from "@app/local-first";
 import { createApi } from "./app";
 import type { WorkerBindings } from "./env";
 

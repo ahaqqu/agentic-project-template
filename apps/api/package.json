@@ -11,8 +11,8 @@
   },
   "dependencies": {
     "@app/infra": "workspace:*",
+    "@app/local-first": "workspace:*",
     "@app/shared-zod": "workspace:*",
-    "@app/sync-protocol": "workspace:*",
     "@sentry/cloudflare": "10.68.0",
     "hono": "4.12.32",
     "zod": "4.4.3"

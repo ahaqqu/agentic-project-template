@@ -1,5 +1,5 @@
 import { HealthResponseSchema, type HealthResponse } from "@app/shared-zod";
-import { SCHEMA_VERSION } from "@app/sync-protocol";
+import { SCHEMA_VERSION } from "@app/local-first";
 import type { RequestContext } from "../lib/context";
 
 export function buildHealth(ctx: RequestContext): HealthResponse {
