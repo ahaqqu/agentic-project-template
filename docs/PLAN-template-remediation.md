@@ -6,7 +6,7 @@ Origin: thermo-nuclear code-quality review (2026-07-28). The review's core findi
 
 | WS | Title | Status | PR |
 |---|---|---|---|
-| 1 | Delete the dead layer | [x] complete | (link below) |
+| 1 | Delete the dead layer | [x] complete | [#3](https://github.com/ahaqqu/agentic-project-template/pull/3) |
 | 2 | `packages/local-first` — DIY local-first module | [ ] not started | |
 | 3a | Valibot contracts (`@app/contracts`) | [ ] not started | |
 | 3b | hono-openapi wiring + route decomposition | [ ] not started | |
