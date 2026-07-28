@@ -37,7 +37,7 @@ See `.agents/skills/writing-tests/SKILL.md` — unit, property, BDD, and integra
 
 ## After implementation
 
-See `.agents/skills/code-review/SKILL.md` — verify changes against philosophy and guardrails before creating a PR.
+See `.agents/skills/code-review/SKILL.md` — verify changes against philosophy and guardrails before creating a PR. It recommends a review depth first: normal, or the opt-in `.agents/skills/thermo-nuclear-code-quality-review/SKILL.md` for an extremely strict maintainability review.
 
 See `.agents/skills/ship/SKILL.md` — staging → tests → production → smoke tests.
 

@@ -1,0 +1,199 @@
+# Template Remediation Plan
+
+Origin: thermo-nuclear code-quality review (2026-07-28). The review's core finding: **the template carries two systems — the documented one and the real one** — plus gates that exempt their own violators. This plan deletes the phantom system, hardens the real one, and gives the gates teeth.
+
+## Status
+
+| WS | Title | Status | PR |
+|---|---|---|---|
+| 1 | Delete the dead layer | [x] complete | (link below) |
+| 2 | `packages/local-first` — DIY local-first module | [ ] not started | |
+| 3a | Valibot contracts (`@app/contracts`) | [ ] not started | |
+| 3b | hono-openapi wiring + route decomposition | [ ] not started | |
+| 4 | Gates with teeth | [ ] not started | |
+| 5 | Tests, i18n, accessibility | [ ] not started | |
+| 6 | Docs sync + template-truth gate | [ ] not started | |
+
+## How to use this plan (handoff protocol)
+
+A fresh session executes this plan as follows:
+
+1. Read `AGENTS.md`, `docs/ARCHITECTURE.md`, `CONTEXT.md`, then this file in full.
+2. Find the first workstream whose status is `not started`. Do not skip ahead — workstreams are dependency-ordered.
+3. Before writing code, confirm the repo is green: `bun install && bun run check && bun run test && bun run e2e`.
+4. Execute the workstream's tasks in order, checking boxes **in this file** as you complete them.
+5. After every task, run `bun run check && bun run test`. Before marking a workstream done, run its **Verify** block.
+6. One PR per workstream, titled `ws<n>: <title>`. Use the `guided-implementation` and `writing-tests` skills per `AGENTS.md`. Update the Status table with the PR link.
+7. If a task contradicts reality (files moved, APIs changed), stop and re-verify against the actual code — this plan references file paths as of 2026-07-28.
+8. If a **Decision point** is marked, do not proceed past it without resolving it per its instructions.
+
+## Locked decisions
+
+These are already decided. Do not reopen them; implement them.
+
+- **D1 — Valibot replaces Zod** for all contracts. Package `packages/shared-zod` becomes `packages/contracts` (`@app/contracts`). Zod is removed from the dependency tree.
+- **D2 — hono-openapi generates the OpenAPI document** from route definitions (via Standard Schema, which Valibot v1 implements). The hand-written `apps/api/src/lib/openapi.ts` is deleted. Risk noted under Decision point DP-1 (WS3a).
+- **D3 — DIY local-first, Tinybase removed.** The custom LWW-element-set CRDT is the canonical sync story, consolidated and hardened in a new `packages/local-first` module. `tinybase` and `workbox-window` are deleted from dependencies. ARCHITECTURE.md is rewritten to describe the real system.
+- **D4 — Raw SQL + SQL migrations are the single database truth.** `packages/db-schema` (Drizzle) is deleted; its migration moves to `apps/api/migrations/`. The API already uses raw SQL exclusively.
+- **D5 — Delete fake/unused adapters rather than wire them. Exception: Sentry is wired for real** (user decision 2026-07-28 — the docs describe the intended end-state for real projects, so the template must demonstrate the real SDK). `ConfigStore.hasEntitlement`, `Cache`, `JobScheduler` are deleted; `packages/infra/src/sentry.ts` is **replaced** with real `@sentry/cloudflare` (Worker) and `@sentry/react` (client) wiring, DSN-gated. `ObjectStore` (R2) stays — it has a real caller (cron backup).
+- **D6 — Gates must not be bypassable.** `check-agentic-limits.mjs` loses its violator exemptions; coverage applies to real modules; ZAP/Schemathesis become blocking. Files that currently violate limits are decomposed (WS3b) *before* the gate is tightened (WS4).
+- **D7 — Accessibility gate is made real.** `@axe-core/playwright` (already a devDependency) is wired into BDD, making ARCHITECTURE.md §5's claim true.
+- **D8 — Payments stay out of the template.** AGENTS.md's Payments section is re-scoped to "applies when payments are added" and points at the `payment-integration` skill.
+
+## Non-goals
+
+- No payments implementation (Xendit/Polar) — deferred per D8.
+- No Better Auth / OAuth / passkeys — anonymous D1 sessions remain; the swap path is documented only.
+- No new features beyond making documented claims real (Sentry wiring per D5). This plan otherwise only deletes, consolidates, hardens, and tests what exists.
+
+---
+
+## WS1 — Delete the dead layer
+
+**Why first:** every deletion shrinks the surface that later workstreams must migrate. Deleting `NoteInputSchema` here means WS3a never rewrites it.
+
+**Tasks:**
+
+- [x] Remove unused dependencies: `tinybase`, `workbox-window` (`apps/web/package.json`); `@hono/zod-openapi` (`apps/api/package.json`); `brace-expansion` root dep removed; **override kept** — `bun pm why` shows it is still required transitively via `vite-plugin-pwa → workbox-build` (security pin for GHSA-mh99-v99m-4gvg).
+- [x] Delete `packages/db-schema/` entirely; move `migrations/0000_init.sql` to `apps/api/migrations/`; update `apps/api/wrangler.toml` migrations path and root `package.json` `db:migrate:local`; remove `@app/db-schema` from `apps/api/package.json`.
+- [x] Edit `apps/api/migrations/0000_init.sql`: drop the unused `rate_limits` table (template is pre-production; rewriting the initial migration is acceptable — note it in the WS6 ADR). Document that existing local dev DBs must be reset (delete `.wrangler/state`). *(Documented in the migration header comment + PR description.)*
+- [x] Delete `packages/infra/src/cache.ts`, `job-scheduler.ts`; remove their exports from `packages/infra/src/index.ts` and their tests from `adapters.test.ts`.
+- [x] Delete `ConfigStore.hasEntitlement` and the `entitlements` Set from `packages/infra/src/config-store.ts`.
+- [x] **Wire real Sentry (replaces the fake facade; D5 exception):** *(facade deleted — SDK inlined per the task's "pick the simpler")*
+  - Worker: add `@sentry/cloudflare` to `apps/api`; wrap the exported handler with Sentry (e.g. `withSentry`) in `apps/api/src/index.ts`, DSN from `env.SENTRY_DSN`. When the DSN is absent, the wrapper is a documented passthrough — the SDK is not initialized and nothing pretends to capture.
+  - Client: add `@sentry/react` to `apps/web`; init in `apps/web/src/main.tsx` (or `lib/sentry.ts`) **only when `VITE_SENTRY_DSN` is set** at build time. Errors-only by default — Session Replay adds ~40 KB gz and would pressure the 200 KB `size-limit` budget; document Replay as opt-in.
+  - Rewrite `packages/infra/src/sentry.ts` as the thin real seam (or inline the SDK and delete the facade — pick the simpler; the current fake `captureException`-that-only-logs must not survive).
+  - Keep `SENTRY_DSN` in `WorkerBindings`; add `SENTRY_DSN` (via `wrangler secret`, per AGENTS.md) and `VITE_SENTRY_DSN` to `.env.example` and README setup docs.
+  - Tests: init/no-init behavior on DSN presence; confirm `bun run size-limit` still passes and record the bundle delta in the PR description.
+- [x] Delete deprecated `apps/web/src/lib/store.ts` and `store.test.ts`; remove `apps/web/src/lib/store.ts` from `vitest.config.ts` coverage include.
+- [x] Delete `NoteInputSchema` from `packages/shared-zod/src/note.ts` (no `POST /v1/notes` exists; sync is the write path).
+- [x] Collapse `SessionSchema`/`AuthResponseSchema` (identical, `packages/shared-zod/src/auth.ts`) into one `AuthResponseSchema`; update importers.
+- [x] Deduplicate `R2Like` (`packages/infra/src/object-store.ts`) vs `R2Bucket` (`apps/api/src/cf-types.ts`): `cf-types.ts` imports the type from `@app/infra`; delete the local copy.
+- [x] Keep `@axe-core/playwright` (wired in WS5 per D7).
+
+**Verify:** `bun install && bun run check && bun run test && bun run build && bun run e2e` all green. `rg -n "tinybase|workbox|zod-openapi|db-schema|JobScheduler|createMemoryCache|hasEntitlement" --glob '!node_modules' --glob '!bun.lock'` returns nothing. Sentry: `SENTRY_DSN` unset → app boots, no capture; set → events flow (verify manually against a real project once, document in PR).
+
+---
+
+## WS2 — `packages/local-first`: DIY local-first module
+
+**Why:** D3. Consolidates the scattered local-first code into one tested, documented module with honest CRDT semantics. Pure TypeScript, no DOM deps in the server-safe parts (the API imports `merge`/`version` too).
+
+**Tasks:**
+
+- [ ] Create `packages/local-first` (`@app/local-first`), absorbing `packages/sync-protocol` (delete it) plus client code moved out of `apps/web/src/lib/`:
+  - `version.ts` — `SCHEMA_VERSION`, `CLIENT_VERSION` (from sync-protocol).
+  - `merge.ts` — LWW-element-set (from sync-protocol), hardened below.
+  - `clock.ts` — **new**: server-bias clock discipline.
+  - `tombstones.ts` — **new**: tombstone strip + GC.
+  - `note-mapper.ts` — **new**: single `NoteRow ↔ Note` mapper (canonical home; deletes the 4 copies: `apps/api/src/lib/notes-repo.ts:5-13,32-38,60-66`, `apps/web/src/lib/notes-store.ts:55-63,105-123`).
+  - `leader.ts`, `sync-loop.ts`, `persistence.ts` — moved from `apps/web/src/lib/` (client-only entrypoint, e.g. `@app/local-first/client`).
+  - `migrations.ts` — moved from `apps/web/src/lib/`; `ClientSnapshot` type unified with `NotesState` (they are identical shapes — one type).
+- [ ] **Tie-break fix (CRDT correctness):** in `merge.ts`, `updatedAt` ties currently resolve to the second argument, so `mergeNotes(a,b) ≠ mergeNotes(b,a)` on same-ms writes. Break ties deterministically (e.g., on equal `updatedAt`, keep the row whose serialized payload is lexicographically greater). Behavior unchanged except exact ties.
+- [ ] **Clock discipline:** `pushPull` currently trusts client `Date.now()`. Add: sync response carries `serverNow`; the client stores `max(Date.now(), serverNow)` as the floor for future `updatedAt` stamps (`clock.ts`). Prevents a slow/fast client clock from losing/winning every merge.
+- [ ] **Tombstones:** on delete, write empty `title`/`body` into the tombstone (stop copying payloads — `apps/web/src/lib/notes-store.ts:82-88`); after a successful `pushPull`, GC tombstones with `updatedAt` older than 30 days (they are server-acknowledged by definition of a successful sync). Document the horizon in the module readme comment.
+- [ ] **Property tests** (fast-check, extending `merge.prop.test.ts`): idempotent, commutative **including exact-timestamp ties**, associative, delete-wins, GC never resurrects or loses alive rows, mapper round-trip.
+- [ ] **Unit tests** for `leader.ts`, `sync-loop.ts`, `persistence.ts`, `clock.ts`, `tombstones.ts` (these have zero tests today).
+- [ ] Remove the impossible-state guard `snap.notes ?? []` in `migrations.ts` (field is non-optional) — or make the parsed type honest if snapshots can genuinely lack it.
+- [ ] Update `apps/web` and `apps/api` imports (`@app/sync-protocol` → `@app/local-first`); delete `packages/sync-protocol`.
+
+**Verify:** `bun run check && bun run test` green with new property/unit tests; `bun run e2e` green (offline-create scenario exercises the real loop). `rg -n "sync-protocol" --glob '!node_modules' --glob '!bun.lock'` returns nothing.
+
+---
+
+## WS3a — Valibot contracts
+
+**Why:** D1. Mechanical, behavior-preserving swap, kept separate from the hono-openapi rewiring so each PR stays reviewable.
+
+- [ ] **Decision point DP-1 (spike, timebox ~1h):** prove `hono-openapi` can generate an OpenAPI 3.1 doc from Hono routes validated with Valibot schemas via Standard Schema, in a scratch file (not committed). It must cover: request-body validation, response schemas, and error responses (401/409). **If it cannot:** stop, record the finding in this plan, and fall back to Zod 4 (keep Zod, wire `@hono/zod-openapi` instead — D1/D2 become "stay on Zod 4"). Do not proceed to WS3a/3b on Valibot without a working spike.
+- [ ] Rename `packages/shared-zod` → `packages/contracts` (`@app/contracts`); rewrite surviving schemas (`health`, `note`, `sync`, `auth`) in Valibot v1 (`v.object`, `v.pipe(v.string(), v.uuid())`, `v.InferOutput` for types). Keep the package's exported names stable where possible to minimize churn.
+- [ ] Swap runtime parsing: `Schema.parse(...)` → `v.parse(...)` in `apps/api/src/app.ts` and any client-side parsing.
+- [ ] Remove `zod` from all `package.json` files; add `valibot` (pin latest stable v1.x; MIT — free-tier compatible).
+- [ ] Rewrite schema unit tests; add an en/id-independent contract test asserting the sync request/response shapes round-trip through `v.parse`.
+- [ ] Update all imports repo-wide; keep `lib/openapi.ts` updated by hand for now (deleted next WS).
+
+**Verify:** `bun run check && bun run test && bun run e2e` green; `rg -n "from \"zod\"|@app/shared-zod" --glob '!node_modules' --glob '!bun.lock'` returns nothing; `bun run size-limit` reports the web bundle (note the delta — Valibot should shrink it).
+
+---
+
+## WS3b — hono-openapi wiring + route decomposition
+
+**Why:** D2 + D6-prep. One route definition produces handler, validation, and OpenAPI doc — deleting the triplicated route truth (`app.ts` routes / `lib/openapi.ts` / `isApiPath` list) and decomposing the 13-import `app.ts` under the 5-import cap so WS4 can tighten the gate.
+
+- [ ] Split `apps/api/src/app.ts` (119 lines, 13 imports) into `apps/api/src/routes/*.ts` — one module per route (`health.ts`, `auth.ts`, `notes.ts`, `sync.ts`), each wiring its own hono-openapi route definition. `app.ts` becomes composition + middleware only (≤5 imports target; middleware may be extracted to `lib/middleware.ts` if needed).
+- [ ] Wire `hono-openapi`: serve the generated doc at `/openapi.json`; **delete `apps/api/src/lib/openapi.ts`** and its test. (`isApiPath` in `apps/api/src/index.ts:13-19` is already a prefix rule, not a route list — no change needed; just verify `/openapi.json` and `/docs` still resolve after the swap.)
+- [ ] Add a route-coverage test: every route registered on the Hono app appears in the generated OpenAPI doc (prevents doc drift permanently).
+- [ ] Extract the CORS callback (`app.ts:33-45`, four nested fallbacks) into a pure `resolveCorsOrigin(origin, requestUrl, allowlist)` in `lib/` with unit tests covering: no origin, allowlisted origin, same-host origin, disallowed origin.
+- [ ] Replace stringly error dispatch (`index.ts:33`, `err.message === "db_unbound"`) with a typed error (`class DbUnboundError extends Error` in `lib/db.ts`) matched by `instanceof`.
+- [ ] Adopt the WS2 `note-mapper` server-side; delete the remaining copies in `notes-repo.ts`.
+- [ ] Shared web API client: new `apps/web/src/lib/api.ts` — one fetch wrapper owning base path, `Authorization: Bearer`, JSON headers, and `X-Correlation-Id` propagation. Refactor `health.ts`, `session.ts`, `notes-store.ts` (via local-first module), `NotesPage.tsx` to use it. Deletes 4 copies of header/URL boilerplate.
+
+**Verify:** `bun run check && bun run test && bun run e2e` green; `curl $STAGING/openapi.json` (or dev) matches real routes — the route-coverage test enforces this in CI; Schemathesis fuzz (WS5 makes it blocking) runs against the generated doc.
+
+---
+
+## WS4 — Gates with teeth
+
+**Why:** D6. Done after WS2/WS3 so the newly-compliant code passes the tightened gates. A gate that can't fail is a no-op that costs CI time and credibility.
+
+- [ ] `scripts/check-agentic-limits.mjs`: remove exemptions for `src/app.ts`, `router.tsx`, `main.tsx`, and `components/*.tsx` (keep test-file and `index.ts`-barrel exemptions). Confirm every previously-exempt file now passes (app.ts decomposed in WS3b; `NotesPage.tsx` refactored below; `main.tsx`/`router.tsx` slimmed below).
+- [ ] Slim `apps/web/src/main.tsx` (7 imports): extract the service-worker update prompt into `lib/sw-update.ts` (also the i18n fix, WS5 — coordinate so this file ends ≤5 imports).
+- [ ] Decompose `apps/web/src/components/NotesPage.tsx` (8 imports): extract sync-status badge into its own component; use the shared `api.ts` client (WS3b).
+- [ ] `vitest.config.ts` coverage: replace the curated include list with `packages/**/src/**/*.ts`, `apps/api/src/**/*.ts`, `apps/web/src/lib/**/*.ts`; exclude only `**/index.ts`, `**/*.d.ts`, entry bootstraps (`main.tsx`), and `components/**` — with a comment stating the policy: *unit coverage for logic; UI covered by Playwright-BDD + axe*. Thresholds stay 80/80/70/80 and must now honestly pass (WS2 added the local-first tests).
+- [ ] `.github/workflows/staging.yml`: remove `continue-on-error: true` (ZAP) and `|| true` (Schemathesis). Triage any findings that surface; suppressions require an inline comment with justification.
+
+**Verify:** `bun run agentic-limits` passes with the reduced exemption list; `bun run test --coverage` passes with the broadened include; a deliberately-added 6th import in a random file fails CI (revert after proving).
+
+---
+
+## WS5 — Tests, i18n, accessibility
+
+- [ ] HTTP-layer route tests through `createApi()` (`app.request(...)`) with `vi.mock`'d repo/auth boundaries: `/v1/sync` 409 schema-mismatch, 429 rate-limit, CORS callback matrix (via WS3b's pure function + one integration smoke), `DELETE /v1/auth/me` 204/401, `POST /v1/auth/anonymous` happy path. These paths are untested today.
+- [ ] Replace `sql.includes(...)` substring fakes in `auth.test.ts`/`notes-repo.test.ts` with a structured in-memory D1 fake (match normalized statements), or bound the fragility with a comment + one integration-style test per repo.
+- [ ] i18n breaches: `main.tsx:46` uses the existing unused `t(locale, "updateAvailable")`/`"reload"` keys (locale sourced the same way `router.tsx` sources it); `HomePage.tsx:43` bare `time` gets a key (en+id). Add a key-parity test: `messages.en` and `messages.id` have identical key sets.
+- [ ] Fix `NotesPage.tsx:84-88`: replace nested ternary with a status→label map; render the `error` sync state distinctly (it currently renders as "Synced"); add `syncError` keys (en+id).
+- [ ] Wire `@axe-core/playwright` (D7): axe scan in the notes BDD suite for home + notes pages; fail on serious/critical violations.
+- [ ] BDD: add a scenario switching language to Bahasa Indonesia and asserting rendered `id` copy (no test exercises the `id` locale today).
+
+**Verify:** `bun run test --coverage` green; `bun run e2e` green including new scenarios; route tests fail when the 409/429 branches are temporarily broken (prove they bite, revert).
+
+---
+
+## WS6 — Docs sync + template-truth gate
+
+**Why:** the review's root cause — nothing kept docs, deps, gates, and code in sync, and the drift gets cloned into every fork. This WS makes the docs true and adds a standing check.
+
+- [ ] `docs/ARCHITECTURE.md` updates:
+  - §2/§13: sync = custom LWW-element-set CRDT, per-record, in `packages/local-first`; remove Tinybase claims; document clock discipline + tombstone GC horizon; note the same-record-concurrent-edit limitation (wholesale LWW) and when to adopt a real CRDT library.
+  - §6: auth = anonymous D1 sessions; Better Auth (OAuth/passkeys) documented as the consuming-project upgrade path.
+  - §7: verify the prose matches the **real** Sentry wiring from WS1 (user decision 2026-07-28: Sentry stays in docs; template demonstrates the real SDK). An earlier demotion of Sentry to "deferred" was reverted the same day.
+  - §13: Valibot + hono-openapi row (replace "Hono + zod-openapi"); remove Drizzle row (raw SQL + migrations); remove Better Auth row (mark as future path).
+  - §9: reconcile the backup claim — the cron handler (`index.ts:42-56`) writes a timestamp JSON to R2, **not** a D1 snapshot. Either make the claim truthful (D1 Time Travel via `docs/RUNBOOK_RESTORE.md` is the real recovery mechanism; the cron is a placeholder seam for consuming projects) or implement a real export. Prefer the honest doc.
+  - §1 + testing table: every gate listed must exist and be blocking (verify one by one).
+- [ ] `AGENTS.md` updates: `packages/shared-zod` → `packages/contracts` references; re-scope the Payments section (D8); add to Definition of Done: *"No dependency without an importer; no adapter without a production caller; every gate blocking; every doc claim has code."*
+- [ ] `CONTEXT.md`, `README.md`: update stack tables (Valibot, `@app/local-first`, removed packages).
+- [ ] ADRs in `adr/`: (1) Valibot + hono-openapi over Zod + zod-openapi (incl. DP-1 spike outcome); (2) DIY LWW CRDT over Tinybase (incl. limitations + adoption trigger); (3) initial-migration edit for `rate_limits` removal.
+- [ ] New gate `scripts/check-template-truth.mjs` + `bun run truth` + CI wiring: fail if any dependency in any `package.json` has zero imports in source (allowlist: build-time tooling with a comment). Runs in `ci.yml` after `agentic-limits`.
+- [ ] Mark all Status rows complete; delete nothing in this file — it is the audit trail.
+
+**Verify:** `bun run truth` passes; a newly-added unused dep fails CI (prove, revert); read ARCHITECTURE.md end-to-end — every claim now has code or a gate behind it.
+
+---
+
+## Global definition of done (all workstreams)
+
+- [ ] `bun run check && bun run test && bun run size-limit && bun run agentic-limits && bun run truth && bun run e2e` green on `main`.
+- [ ] Zero dead dependencies (`truth` gate), zero test-only adapters, zero non-blocking CI gates.
+- [ ] One source of truth each for: DB schema (SQL migrations), routes/OpenAPI (hono-openapi definitions), note mapping (`note-mapper.ts`), client API access (`api.ts`).
+- [ ] `mergeNotes` property-tested for idempotency, commutativity (incl. ties), associativity.
+- [ ] ARCHITECTURE.md contains no claim without code or a gate behind it.
+
+## Risks
+
+| Risk | Mitigation |
+|---|---|
+| `@sentry/react` bundle cost (~25 KB gz errors-only) pressures the 200 KB budget | Errors-only default; Replay opt-in; measure delta in WS1 and record in PR |
+| hono-openapi/Valibot integration immature | DP-1 spike gates WS3a; fallback to Zod 4 is pre-decided |
+| WS2 moves break the offline BDD scenario | Run `bun run e2e` before marking WS2 done; move files before changing behavior |
+| Tightened gates block merges mid-plan | WS4 is sequenced after the refactors that create compliance; tighten and verify in the same PR |
+| Migration edit breaks existing dev DBs | Template is pre-production; WS1 documents `.wrangler/state` reset |
