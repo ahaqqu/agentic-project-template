@@ -23,7 +23,7 @@ export default defineConfig({
         "apps/api/src/lib/context.ts",
         "apps/web/src/lib/i18n.ts",
         "apps/web/src/lib/health.ts",
-        "apps/web/src/lib/store.ts",
+        "apps/web/src/lib/sentry.ts",
         "apps/web/src/lib/session.ts",
         "apps/web/src/lib/persist.ts",
         "apps/web/src/lib/migrations.ts",

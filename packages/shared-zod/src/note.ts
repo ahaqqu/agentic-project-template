@@ -10,13 +10,6 @@ export const NoteSchema = z.object({
 
 export type Note = z.infer<typeof NoteSchema>;
 
-export const NoteInputSchema = z.object({
-  title: z.string().min(1).max(200),
-  body: z.string().max(10_000).optional(),
-});
-
-export type NoteInput = z.infer<typeof NoteInputSchema>;
-
 export const NoteListSchema = z.object({
   notes: z.array(NoteSchema),
 });

@@ -50,6 +50,13 @@ CLOUDFLARE_ACCOUNT_ID=…
 CLOUDFLARE_API_TOKEN=…   # Workers Scripts:Edit, D1:Edit, R2:Edit
 ```
 
+Error tracking is optional and DSN-gated (Sentry free tier). With no DSNs set, the SDKs stay disabled:
+
+```bash
+bunx wrangler secret put SENTRY_DSN    # Worker errors (per env)
+VITE_SENTRY_DSN=… bun run build        # web errors-only; Session Replay is opt-in
+```
+
 ## Develop a product
 
 ```
