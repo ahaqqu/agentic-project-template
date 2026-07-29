@@ -1,4 +1,4 @@
-import type { Note, SyncResponse } from "@app/shared-zod";
+import type { Note, SyncResponse } from "@app/contracts";
 import {
   CLIENT_VERSION,
   SCHEMA_VERSION,

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { Note } from "@app/shared-zod";
+import type { Note } from "@app/contracts";
 import { SCHEMA_VERSION } from "@app/local-first";
 import { startSyncLoop, type SyncStatus } from "@app/local-first/client";
 import { t, type Locale } from "../lib/i18n";

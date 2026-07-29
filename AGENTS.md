@@ -10,7 +10,7 @@ These apply regardless of whether you are planning, implementing, reviewing, or 
 - When adding a dependency, you MUST verify free-tier compatibility. You MUST NEVER add paid services to the critical path.
 - When adding user-facing strings, you MUST externalize for `en` and `id`. You MUST NEVER hardcode copy.
 - When logging, you MUST use the Logger adapter with structured JSON. You MUST NEVER use `console.log`.
-- When validating input, you MUST use Zod at every external boundary.
+- When validating input, you MUST use Valibot schemas from `packages/contracts` (`@app/contracts`) at every external boundary.
 - When handling secrets, you MUST use `wrangler secret`. You MUST NEVER commit secrets to the repo.
 - Files are 300 lines or fewer with 5 or fewer direct dependencies.
 

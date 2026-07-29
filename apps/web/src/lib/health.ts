@@ -1,7 +1,8 @@
 import {
   HealthResponseSchema,
   type HealthResponse,
-} from "@app/shared-zod";
+} from "@app/contracts";
+import * as v from "valibot";
 
 export async function fetchHealth(
   signal?: AbortSignal,
@@ -12,5 +13,5 @@ export async function fetchHealth(
     throw new Error(`health_http_${res.status}`);
   }
   const json: unknown = await res.json();
-  return HealthResponseSchema.parse(json);
+  return v.parse(HealthResponseSchema, json);
 }

@@ -10,12 +10,12 @@
     "deploy": "wrangler deploy -c wrangler.toml --env=\"\""
   },
   "dependencies": {
+    "@app/contracts": "workspace:*",
     "@app/infra": "workspace:*",
     "@app/local-first": "workspace:*",
-    "@app/shared-zod": "workspace:*",
     "@sentry/cloudflare": "10.68.0",
     "hono": "4.12.32",
-    "zod": "4.4.3"
+    "valibot": "1.4.2"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "5.20260724.1",

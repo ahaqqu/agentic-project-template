@@ -10,7 +10,7 @@ export default defineConfig({
       provider: "v8",
       reporter: ["text", "json-summary"],
       include: [
-        "packages/shared-zod/src/**/*.ts",
+        "packages/contracts/src/**/*.ts",
         "packages/local-first/src/**/*.ts",
         "packages/infra/src/**/*.ts",
         "apps/api/src/env.ts",

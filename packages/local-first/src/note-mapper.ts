@@ -1,4 +1,4 @@
-import type { Note } from "@app/shared-zod";
+import type { Note } from "@app/contracts";
 import type { NoteRow } from "./merge";
 
 /** Raw D1 `notes` table row (`deleted` stored as 0/1). */

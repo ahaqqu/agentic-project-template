@@ -8,8 +8,10 @@ export {
   type Note,
 } from "./note";
 export {
+  SyncNoteSchema,
   SyncRequestSchema,
   SyncResponseSchema,
+  type SyncNote,
   type SyncRequest,
   type SyncResponse,
 } from "./sync";

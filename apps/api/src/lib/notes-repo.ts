@@ -1,4 +1,4 @@
-import type { Note } from "@app/shared-zod";
+import type { Note } from "@app/contracts";
 import {
   aliveNotes,
   dbToRow,
