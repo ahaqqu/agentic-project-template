@@ -29,6 +29,18 @@ export function clearSession(): void {
   localStorage.removeItem(KEY);
 }
 
+/**
+ * Deletes the account server-side and clears the local session.
+ * Returns false (no-op) when there is no session to delete.
+ */
+export async function deleteSession(): Promise<boolean> {
+  const session = loadSession();
+  if (!session) return false;
+  await apiFetch("/auth/me", { method: "DELETE", token: session.token });
+  clearSession();
+  return true;
+}
+
 export async function ensureSession(): Promise<ClientSession> {
   const existing = loadSession();
   if (existing) return existing;
