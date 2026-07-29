@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { Note } from "@app/contracts";
 import { SCHEMA_VERSION } from "@app/local-first";
 import { startSyncLoop, type SyncStatus } from "@app/local-first/client";
+import { apiFetch } from "../lib/api";
 import { t, type Locale } from "../lib/i18n";
 import {
   listAlive,
@@ -66,10 +67,7 @@ export function NotesPage({ locale }: { locale: Locale }) {
   const wipe = async () => {
     const session = loadSession();
     if (!session) return;
-    await fetch("/v1/auth/me", {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${session.token}` },
-    });
+    await apiFetch("/auth/me", { method: "DELETE", token: session.token });
     clearSession();
     setState({ schemaVersion: SCHEMA_VERSION, notes: [] });
   };

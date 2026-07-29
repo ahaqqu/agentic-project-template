@@ -1,10 +1,10 @@
+import { AuthResponseSchema, type AuthResponse } from "@app/contracts";
+import * as v from "valibot";
+import { apiFetch } from "./api";
+
 const KEY = "apt.session";
 
-export type ClientSession = {
-  userId: string;
-  token: string;
-  expiresAt: number;
-};
+export type ClientSession = AuthResponse;
 
 export function loadSession(): ClientSession | null {
   try {
@@ -32,9 +32,9 @@ export function clearSession(): void {
 export async function ensureSession(): Promise<ClientSession> {
   const existing = loadSession();
   if (existing) return existing;
-  const res = await fetch("/v1/auth/anonymous", { method: "POST" });
+  const res = await apiFetch("/auth/anonymous", { method: "POST" });
   if (!res.ok) throw new Error(`auth_${res.status}`);
-  const body = (await res.json()) as ClientSession;
+  const body = v.parse(AuthResponseSchema, await res.json());
   saveSession(body);
   return body;
 }

@@ -3,12 +3,12 @@ import {
   type HealthResponse,
 } from "@app/contracts";
 import * as v from "valibot";
+import { apiFetch } from "./api";
 
 export async function fetchHealth(
   signal?: AbortSignal,
 ): Promise<HealthResponse> {
-  const init: RequestInit = signal ? { signal } : {};
-  const res = await fetch("/v1/health", init);
+  const res = await apiFetch("/health", { signal });
   if (!res.ok) {
     throw new Error(`health_http_${res.status}`);
   }

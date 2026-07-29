@@ -1,5 +1,6 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import worker from "./index";
+import { DbUnboundError } from "./lib/db";
 
 const { captureException, withSentry } = vi.hoisted(() => ({
   captureException: vi.fn(),
@@ -13,6 +14,10 @@ type OptionsFn = (env: Record<string, string>) => Record<string, unknown>;
 const env = {
   ASSETS: { fetch: async () => new Response("spa") },
 };
+
+beforeEach(() => {
+  captureException.mockClear();
+});
 
 describe("worker sentry wiring", () => {
   it("disables the SDK when SENTRY_DSN is absent (passthrough)", () => {
@@ -46,18 +51,16 @@ describe("worker sentry wiring", () => {
     expect(captureException).not.toHaveBeenCalled();
   });
 
-  it("route errors stay inside Hono's default onError (WS3b wires typed capture)", async () => {
-    // Reality check: Hono catches handler throws (e.g. db_unbound) and returns
-    // its own 500, so index.ts's catch — and Sentry.captureException — are not
-    // reached for route errors. WS3b replaces this with a typed DbUnboundError
-    // + instanceof dispatch; this test pins current behavior so that PR sees it.
+  it("maps DbUnboundError to 503 via the typed onError and captures it", async () => {
     const res = await worker.fetch(
       new Request("https://x/v1/notes"),
       env,
       undefined as never,
     );
-    expect(res.status).toBe(500);
-    expect(captureException).not.toHaveBeenCalled();
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({ error: "db_unbound" });
+    expect(captureException).toHaveBeenCalledOnce();
+    expect(captureException.mock.calls[0]?.[0]).toBeInstanceOf(DbUnboundError);
   });
 
   it("passes non-API paths through to assets", async () => {
