@@ -11,7 +11,7 @@ Origin: thermo-nuclear code-quality review (2026-07-28). The review's core findi
 | 3a | Valibot contracts (`@app/contracts`) | [x] complete | [#5](https://github.com/ahaqqu/agentic-project-template/pull/5) |
 | 3b | hono-openapi wiring + route decomposition | [x] complete | [#6](https://github.com/ahaqqu/agentic-project-template/pull/6) |
 | 4 | Gates with teeth | [x] complete | [#7](https://github.com/ahaqqu/agentic-project-template/pull/7) |
-| 5 | Tests, i18n, accessibility | [ ] not started | |
+| 5 | Tests, i18n, accessibility | [x] complete | [#8](https://github.com/ahaqqu/agentic-project-template/pull/8) |
 | 6 | Docs sync + template-truth gate | [ ] not started | |
 
 ## How to use this plan (handoff protocol)
