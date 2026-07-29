@@ -12,7 +12,7 @@ Origin: thermo-nuclear code-quality review (2026-07-28). The review's core findi
 | 3b | hono-openapi wiring + route decomposition | [x] complete | [#6](https://github.com/ahaqqu/agentic-project-template/pull/6) |
 | 4 | Gates with teeth | [x] complete | [#7](https://github.com/ahaqqu/agentic-project-template/pull/7) |
 | 5 | Tests, i18n, accessibility | [x] complete | [#8](https://github.com/ahaqqu/agentic-project-template/pull/8) |
-| 6 | Docs sync + template-truth gate | [ ] not started | |
+| 6 | Docs sync + template-truth gate | [x] complete | TBD |
 
 ## How to use this plan (handoff protocol)
 
@@ -163,18 +163,18 @@ These are already decided. Do not reopen them; implement them.
 
 **Why:** the review's root cause — nothing kept docs, deps, gates, and code in sync, and the drift gets cloned into every fork. This WS makes the docs true and adds a standing check.
 
-- [ ] `docs/ARCHITECTURE.md` updates:
-  - §2/§13: sync = custom LWW-element-set CRDT, per-record, in `packages/local-first`; remove Tinybase claims; document clock discipline + tombstone GC horizon; note the same-record-concurrent-edit limitation (wholesale LWW) and when to adopt a real CRDT library.
-  - §6: auth = anonymous D1 sessions; Better Auth (OAuth/passkeys) documented as the consuming-project upgrade path.
-  - §7: verify the prose matches the **real** Sentry wiring from WS1 (user decision 2026-07-28: Sentry stays in docs; template demonstrates the real SDK). An earlier demotion of Sentry to "deferred" was reverted the same day.
-  - §13: Valibot + hono-openapi row (replace "Hono + zod-openapi"); remove Drizzle row (raw SQL + migrations); remove Better Auth row (mark as future path).
-  - §9: reconcile the backup claim — the cron handler (`index.ts:42-56`) writes a timestamp JSON to R2, **not** a D1 snapshot. Either make the claim truthful (D1 Time Travel via `docs/RUNBOOK_RESTORE.md` is the real recovery mechanism; the cron is a placeholder seam for consuming projects) or implement a real export. Prefer the honest doc.
-  - §1 + testing table: every gate listed must exist and be blocking (verify one by one).
-- [ ] `AGENTS.md` updates: `packages/shared-zod` → `packages/contracts` references; re-scope the Payments section (D8); add to Definition of Done: *"No dependency without an importer; no adapter without a production caller; every gate blocking; every doc claim has code."*
-- [ ] `CONTEXT.md`, `README.md`: update stack tables (Valibot, `@app/local-first`, removed packages).
-- [ ] ADRs in `adr/`: (1) Valibot + hono-openapi over Zod + zod-openapi (incl. DP-1 spike outcome); (2) DIY LWW CRDT over Tinybase (incl. limitations + adoption trigger); (3) initial-migration edit for `rate_limits` removal.
-- [ ] New gate `scripts/check-template-truth.mjs` + `bun run truth` + CI wiring: fail if any dependency in any `package.json` has zero imports in source (allowlist: build-time tooling with a comment). Runs in `ci.yml` after `agentic-limits`.
-- [ ] Mark all Status rows complete; delete nothing in this file — it is the audit trail.
+- [x] `docs/ARCHITECTURE.md` updates:
+  - [x] §2/§13: sync = custom LWW-element-set CRDT, per-record, in `packages/local-first`; remove Tinybase claims; document clock discipline + tombstone GC horizon; note the same-record-concurrent-edit limitation (wholesale LWW) and when to adopt a real CRDT library.
+  - [x] §6: auth = anonymous D1 sessions; Better Auth (OAuth/passkeys) documented as the consuming-project upgrade path.
+  - [x] §7: verify the prose matches the **real** Sentry wiring from WS1 (user decision 2026-07-28: Sentry stays in docs; template demonstrates the real SDK). An earlier demotion of Sentry to "deferred" was reverted the same day.
+  - [x] §13: Valibot + hono-openapi row (replace "Hono + zod-openapi"); remove Drizzle row (raw SQL + migrations); remove Better Auth row (mark as future path).
+  - [x] §9: reconcile the backup claim — the cron handler (`index.ts:42-56`) writes a timestamp JSON to R2, **not** a D1 snapshot. Either make the claim truthful (D1 Time Travel via `docs/RUNBOOK_RESTORE.md` is the real recovery mechanism; the cron is a placeholder seam for consuming projects) or implement a real export. Prefer the honest doc.
+  - [x] §1 + testing table: every gate listed must exist and be blocking (verify one by one).
+- [x] `AGENTS.md` updates: `packages/shared-zod` → `packages/contracts` references; re-scope the Payments section (D8); add to Definition of Done: *"No dependency without an importer; no adapter without a production caller; every gate blocking; every doc claim has code."*
+- [x] `CONTEXT.md`, `README.md`: update stack tables (Valibot, `@app/local-first`, removed packages).
+- [x] ADRs in `adr/`: (1) Valibot + hono-openapi over Zod + zod-openapi (incl. DP-1 spike outcome); (2) DIY LWW CRDT over Tinybase (incl. limitations + adoption trigger); (3) initial-migration edit for `rate_limits` removal.
+- [x] New gate `scripts/check-template-truth.mjs` + `bun run truth` + CI wiring: fail if any dependency in any `package.json` has zero imports in source (allowlist: build-time tooling with a comment). Runs in `ci.yml` after `agentic-limits`.
+- [x] Mark all Status rows complete; delete nothing in this file — it is the audit trail.
 
 **Verify:** `bun run truth` passes; a newly-added unused dep fails CI (prove, revert); read ARCHITECTURE.md end-to-end — every claim now has code or a gate behind it.
 

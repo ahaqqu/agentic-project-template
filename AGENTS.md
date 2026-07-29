@@ -16,6 +16,8 @@ These apply regardless of whether you are planning, implementing, reviewing, or 
 
 ## Payments
 
+This template ships **without** payments (see CONTEXT.md). The rules in this section apply **when a consuming project adds payments** — start from the `.agents/skills/payment-integration/SKILL.md` skill, which provides the Payments adapter interface in `packages/infra`.
+
 - Payments MUST go through the Payments adapter interface in `packages/infra`. Provider APIs are NEVER called from business logic.
 - Webhook handlers MUST verify signatures on the raw body before JSON parsing.
 - Webhook handlers MUST be idempotent (same payload twice = same state as once).
@@ -47,11 +49,12 @@ See `.agents/skills/diagnosing-bugs/SKILL.md` — tight feedback-loop-first debu
 
 ## Definition of Done
 
-- [ ] All CI gates green: `bun run check`, `bun run test`, coverage > 80%, `bun run size-limit`, security scans.
+- [ ] All CI gates green: `bun run check`, `bun run test` (coverage > 80%), `bun run size-limit`, `bun run agentic-limits`, `bun run truth`, security scans.
 - [ ] Contracts written before implementation.
 - [ ] API or UI changes: BDD tests added covering the user-facing flow.
 - [ ] Schema changes: server migration + client migration + `SCHEMA_VERSION` bump.
-- [ ] New routes: zod-openapi contract defined; docs regenerate cleanly.
+- [ ] New routes: Valibot contract in `packages/contracts` + hono-openapi route definition; `/openapi.json` regenerates from the same definitions.
 - [ ] No new paid dependency in the critical path.
+- [ ] No dependency without an importer; no adapter without a production caller; every gate blocking; every doc claim has code.
 - [ ] Nothing sensitive in the diff.
 - [ ] Architectural changes documented in PR description.

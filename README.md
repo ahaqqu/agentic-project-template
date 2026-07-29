@@ -11,7 +11,7 @@ Working full-stack starter for AI-assisted product development: Cloudflare Worke
 | Cheap | Cloudflare free tier |
 | Offline-first | LWW merge (`@app/local-first`) + IndexedDB + batched `/v1/sync` |
 | Fast | Bundle &lt;200 KB gzip; PWA |
-| Agent-ready | Zod contracts, adapters, ≤300-line files, skill pipeline |
+| Agent-ready | Valibot contracts, adapters, ≤300-line files, skill pipeline |
 | Quality | Unit, property, BDD, size-limit, security CI |
 
 Docs: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) · [`AGENTS.md`](AGENTS.md) · [`CONTEXT.md`](CONTEXT.md)
@@ -23,9 +23,9 @@ Docs: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) · [`AGENTS.md`](AGENTS.md)
 | Edge | Workers + Static Assets + D1 + R2 + Cron |
 | API | Hono `/v1/*` |
 | Web | React 19 + TanStack Router/Query + Tailwind + PWA |
-| Contracts | Zod (`packages/shared-zod`) |
+| Contracts | Valibot (`packages/contracts`) + hono-openapi |
 | Sync | `mergeNotes` + leader election + BroadcastChannel |
-| Infra | Logger, ObjectStore, ConfigStore, Cache, JobScheduler, RateLimiter |
+| Infra | Logger, ObjectStore, ConfigStore, RateLimiter |
 | Auth | Anonymous session in D1 (Bearer); cascade delete |
 | Tests | Vitest + fast-check + Playwright-BDD |
 
@@ -65,7 +65,7 @@ grill-with-docs → to-spec → to-tickets → plan-review
   → code-review → ship
 ```
 
-Extend **Notes** patterns: contracts in `shared-zod` → D1 migration + client migration + `SCHEMA_VERSION` → route under `/v1/` → UI route → BDD.
+Extend **Notes** patterns: contracts in `packages/contracts` → D1 migration + client migration + `SCHEMA_VERSION` → route under `/v1/` → UI route → BDD.
 
 ### Commands
 
@@ -77,6 +77,7 @@ Extend **Notes** patterns: contracts in `shared-zod` → D1 migration + client m
 | `bun run e2e` | Playwright-BDD |
 | `bun run size-limit` | Bundle budget |
 | `bun run agentic-limits` | File size / import caps |
+| `bun run truth` | No dependency without an importer |
 | `bun run deploy` | Production Worker |
 | `bun run deploy:staging` | Staging |
 
@@ -93,7 +94,7 @@ Extend **Notes** patterns: contracts in `shared-zod` → D1 migration + client m
 
 | Band | Status |
 |---|---|
-| P0 core (D1, sync, BDD, security CI, zod contracts) | Done |
+| P0 core (D1, sync, BDD, security CI, Valibot contracts) | Done |
 | P1 (auth session, CORS, adapters/R2, router, PWA, staging workflows) | Done |
 | P2 (lint limits, restore runbook, ZAP/fuzz workflows, quota doc) | Done |
 | P3 except payments (rate limit, account cascade delete) | Done |
