@@ -14,7 +14,7 @@ export function NoteList({
   return (
     <ul className="space-y-2" data-testid="note-list">
       {notes.length === 0 && (
-        <li className="text-slate-500" data-testid="note-empty">
+        <li className="text-slate-400" data-testid="note-empty">
           {t(locale, "empty")}
         </li>
       )}
@@ -30,7 +30,7 @@ export function NoteList({
               </div>
               <Button
                 type="button"
-                className="bg-rose-500/90"
+                variant="danger"
                 data-testid="note-delete"
                 onClick={() => void onDelete(n.id)}
               >
