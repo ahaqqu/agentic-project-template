@@ -1,6 +1,6 @@
 import { test, fc } from "@fast-check/vitest";
 import { expect } from "vitest";
-import type { Note } from "@app/shared-zod";
+import type { Note } from "@app/contracts";
 import type { NoteRow } from "./merge";
 import { noteToRow, rowToNote } from "./note-mapper";
 

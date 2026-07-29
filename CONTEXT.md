@@ -10,7 +10,7 @@ Working monorepo proving `docs/ARCHITECTURE.md` via a **Notes** CRUD vertical sl
 
 - `apps/api` — Hono Worker: health, anonymous auth, notes list, sync, OpenAPI; ASSETS for SPA; D1 + R2; cron backup
 - `apps/web` — React PWA + TanStack Router (`/`, `/notes`); IndexedDB notes; leader sync; en/id
-- `packages/shared-zod` — Health, Note, Sync, Auth contracts
+- `packages/contracts` — Health, Note, Sync, Auth contracts (Valibot)
 - `packages/local-first` — `SCHEMA_VERSION=2`, LWW `mergeNotes` (+ property tests), clock discipline, tombstone GC, note-mapper; `/client` entrypoint: leader election, sync loop, persistence, migrations
 - `packages/infra` — Logger, ObjectStore, ConfigStore, Cache, JobScheduler, RateLimiter, Sentry facade
 - `packages/db-schema` — users, sessions, notes, rate_limits + SQL migration

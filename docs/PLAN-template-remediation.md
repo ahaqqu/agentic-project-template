@@ -8,7 +8,7 @@ Origin: thermo-nuclear code-quality review (2026-07-28). The review's core findi
 |---|---|---|---|
 | 1 | Delete the dead layer | [x] complete | [#3](https://github.com/ahaqqu/agentic-project-template/pull/3) |
 | 2 | `packages/local-first` — DIY local-first module | [x] complete | [#4](https://github.com/ahaqqu/agentic-project-template/pull/4) |
-| 3a | Valibot contracts (`@app/contracts`) | [ ] not started | |
+| 3a | Valibot contracts (`@app/contracts`) | [x] complete | [#5](https://github.com/ahaqqu/agentic-project-template/pull/5) |
 | 3b | hono-openapi wiring + route decomposition | [ ] not started | |
 | 4 | Gates with teeth | [ ] not started | |
 | 5 | Tests, i18n, accessibility | [ ] not started | |
@@ -105,12 +105,12 @@ These are already decided. Do not reopen them; implement them.
 
 **Why:** D1. Mechanical, behavior-preserving swap, kept separate from the hono-openapi rewiring so each PR stays reviewable.
 
-- [ ] **Decision point DP-1 (spike, timebox ~1h):** prove `hono-openapi` can generate an OpenAPI 3.1 doc from Hono routes validated with Valibot schemas via Standard Schema, in a scratch file (not committed). It must cover: request-body validation, response schemas, and error responses (401/409). **If it cannot:** stop, record the finding in this plan, and fall back to Zod 4 (keep Zod, wire `@hono/zod-openapi` instead — D1/D2 become "stay on Zod 4"). Do not proceed to WS3a/3b on Valibot without a working spike.
-- [ ] Rename `packages/shared-zod` → `packages/contracts` (`@app/contracts`); rewrite surviving schemas (`health`, `note`, `sync`, `auth`) in Valibot v1 (`v.object`, `v.pipe(v.string(), v.uuid())`, `v.InferOutput` for types). Keep the package's exported names stable where possible to minimize churn.
-- [ ] Swap runtime parsing: `Schema.parse(...)` → `v.parse(...)` in `apps/api/src/app.ts` and any client-side parsing.
-- [ ] Remove `zod` from all `package.json` files; add `valibot` (pin latest stable v1.x; MIT — free-tier compatible).
-- [ ] Rewrite schema unit tests; add an en/id-independent contract test asserting the sync request/response shapes round-trip through `v.parse`.
-- [ ] Update all imports repo-wide; keep `lib/openapi.ts` updated by hand for now (deleted next WS).
+- [x] **Decision point DP-1 (spike, timebox ~1h):** prove `hono-openapi` can generate an OpenAPI 3.1 doc from Hono routes validated with Valibot schemas via Standard Schema, in a scratch file (not committed). It must cover: request-body validation, response schemas, and error responses (401/409). **If it cannot:** stop, record the finding in this plan, and fall back to Zod 4 (keep Zod, wire `@hono/zod-openapi` instead — D1/D2 become "stay on Zod 4"). Do not proceed to WS3a/3b on Valibot without a working spike. *(Outcome 2026-07-29: PASS — hono-openapi@1.3.1 + valibot@1.4.2 generated a 3.1 doc with request-body validation, response schemas, and 401/409 error responses all present; invalid bodies rejected at runtime. Spike needed `@hono/standard-validator`, `@standard-community/standard-json`, `@standard-community/standard-openapi`, `@valibot/to-json-schema` alongside — remember for WS3b. Fallback not taken; D1/D2 proceed as locked.)*
+- [x] Rename `packages/shared-zod` → `packages/contracts` (`@app/contracts`); rewrite surviving schemas (`health`, `note`, `sync`, `auth`) in Valibot v1 (`v.object`, `v.pipe(v.string(), v.uuid())`, `v.InferOutput` for types). Keep the package's exported names stable where possible to minimize churn. *(All exported names kept; one addition: `SyncNoteSchema` — sync-request items must accept payload-stripped tombstones with empty titles, which the old `NoteSchema(title: min 1)` rejected. This was a latent WS2 contract bug: delete-then-sync failed request validation. The Valibot rewrite makes the contract match the real client behavior.)*
+- [x] Swap runtime parsing: `Schema.parse(...)` → `v.parse(...)` in `apps/api/src/app.ts` and any client-side parsing. *(app.ts ×4, routes/health.ts, apps/web/src/lib/health.ts.)*
+- [x] Remove `zod` from all `package.json` files; add `valibot` (pin latest stable v1.x; MIT — free-tier compatible). *(valibot@1.4.2 in `@app/contracts`, `@app/api`, `@app/web`; zod fully removed — `bun pm why zod` finds nothing in the lockfile. The direct `zod` dep in apps/api had zero importers.)*
+- [x] Rewrite schema unit tests; add an en/id-independent contract test asserting the sync request/response shapes round-trip through `v.parse`. *(health/note tests rewritten on `v.safeParse`; new `sync.test.ts` covers tombstone-accepting requests, `serverNow`-required responses, and the round-trip contract test.)*
+- [x] Update all imports repo-wide; keep `lib/openapi.ts` updated by hand for now (deleted next WS). *(No openapi.ts change needed — it describes routes without schema detail.)*
 
 **Verify:** `bun run check && bun run test && bun run e2e` green; `rg -n "from \"zod\"|@app/shared-zod" --glob '!node_modules' --glob '!bun.lock'` returns nothing; `bun run size-limit` reports the web bundle (note the delta — Valibot should shrink it).
 

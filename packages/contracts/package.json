@@ -1,5 +1,5 @@
 {
-  "name": "@app/shared-zod",
+  "name": "@app/contracts",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -10,7 +10,7 @@
     "check": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "zod": "4.4.3"
+    "valibot": "1.4.2"
   },
   "devDependencies": {
     "typescript": "5.9.3"

@@ -3,9 +3,10 @@ import {
   NoteListSchema,
   SyncRequestSchema,
   SyncResponseSchema,
-} from "@app/shared-zod";
+} from "@app/contracts";
 import { CLIENT_VERSION, SCHEMA_VERSION } from "@app/local-first";
 import { Hono } from "hono";
+import * as v from "valibot";
 import { cors } from "hono/cors";
 import { secureHeaders } from "hono/secure-headers";
 import { allowedOrigins, resolveEnvName, type WorkerBindings } from "./env";
@@ -69,7 +70,9 @@ export function createApi() {
 
   api.post("/v1/auth/anonymous", async (c) => {
     const db = requireDb(c.env);
-    return c.json(AuthResponseSchema.parse(await createAnonymousSession(db)));
+    return c.json(
+      v.parse(AuthResponseSchema, await createAnonymousSession(db)),
+    );
   });
 
   api.delete("/v1/auth/me", async (c) => {
@@ -84,14 +87,16 @@ export function createApi() {
     const db = requireDb(c.env);
     const userId = await resolveUserId(db, c.req.header("Authorization"));
     if (!userId) return c.json({ error: "unauthorized" }, 401);
-    return c.json(NoteListSchema.parse({ notes: await listNotes(db, userId) }));
+    return c.json(
+      v.parse(NoteListSchema, { notes: await listNotes(db, userId) }),
+    );
   });
 
   api.post("/v1/sync", async (c) => {
     const db = requireDb(c.env);
     const userId = await resolveUserId(db, c.req.header("Authorization"));
     if (!userId) return c.json({ error: "unauthorized" }, 401);
-    const body = SyncRequestSchema.parse(await c.req.json());
+    const body = v.parse(SyncRequestSchema, await c.req.json());
     if (body.schemaVersion !== SCHEMA_VERSION) {
       return c.json(
         {
@@ -104,7 +109,7 @@ export function createApi() {
     }
     const notes = await syncNotes(db, userId, body.notes);
     return c.json(
-      SyncResponseSchema.parse({
+      v.parse(SyncResponseSchema, {
         schemaVersion: SCHEMA_VERSION,
         serverNow: Date.now(),
         notes,
