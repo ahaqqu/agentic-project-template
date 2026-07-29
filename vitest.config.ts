@@ -9,29 +9,22 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "json-summary"],
+      // Policy: unit-test coverage for logic — packages, the API, and the
+      // web lib layer. UI (components/**) and entry bootstraps (main.tsx)
+      // are covered by Playwright-BDD + axe, not unit tests. Adding a logic
+      // module under these globs means covering it — no curated opt-out.
       include: [
-        "packages/contracts/src/**/*.ts",
-        "packages/local-first/src/**/*.ts",
-        "packages/infra/src/**/*.ts",
-        "apps/api/src/env.ts",
-        "apps/api/src/app.ts",
-        "apps/api/src/routes/**/*.ts",
-        "apps/api/src/lib/auth.ts",
-        "apps/api/src/lib/cors.ts",
-        "apps/api/src/lib/db.ts",
-        "apps/api/src/lib/errors.ts",
-        "apps/api/src/lib/guard.ts",
-        "apps/api/src/lib/middleware.ts",
-        "apps/api/src/lib/rate-limit-mw.ts",
-        "apps/api/src/lib/notes-repo.ts",
-        "apps/api/src/lib/context.ts",
-        "apps/web/src/lib/api.ts",
-        "apps/web/src/lib/i18n.ts",
-        "apps/web/src/lib/health.ts",
-        "apps/web/src/lib/sentry.ts",
-        "apps/web/src/lib/session.ts",
+        "packages/**/src/**/*.ts",
+        "apps/api/src/**/*.ts",
+        "apps/web/src/lib/**/*.ts",
       ],
-      exclude: ["**/*.{test,prop.test}.ts", "**/index.ts", "**/*.d.ts"],
+      exclude: [
+        "**/*.{test,prop.test}.ts",
+        "**/index.ts",
+        "**/*.d.ts",
+        "apps/web/src/main.tsx",
+        "apps/web/src/components/**",
+      ],
       thresholds: {
         lines: 80,
         functions: 80,
