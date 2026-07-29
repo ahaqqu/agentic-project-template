@@ -1,4 +1,4 @@
-import type { Note, SyncResponse } from "@app/contracts";
+import { SyncResponseSchema, type Note } from "@app/contracts";
 import {
   CLIENT_VERSION,
   SCHEMA_VERSION,
@@ -13,6 +13,8 @@ import {
   type NoteRow,
 } from "@app/local-first";
 import { migrateToLatest, type NotesState } from "@app/local-first/client";
+import * as v from "valibot";
+import { apiFetch } from "./api";
 
 export type { NotesState };
 
@@ -87,12 +89,9 @@ export async function pushPull(
   state: NotesState,
   token: string,
 ): Promise<NotesState> {
-  const res = await fetch("/v1/sync", {
+  const res = await apiFetch("/sync", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
+    token,
     body: JSON.stringify({
       schemaVersion: SCHEMA_VERSION,
       clientVersion: CLIENT_VERSION,
@@ -101,7 +100,7 @@ export async function pushPull(
   });
   if (res.status === 409) throw new Error("schema_mismatch");
   if (!res.ok) throw new Error(`sync_${res.status}`);
-  const body = (await res.json()) as SyncResponse;
+  const body = v.parse(SyncResponseSchema, await res.json());
   const next: NotesState = {
     schemaVersion: SCHEMA_VERSION,
     notes: gcTombstones(mergeNotes(state.notes, body.notes.map(noteToRow))),

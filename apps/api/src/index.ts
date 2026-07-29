@@ -26,15 +26,8 @@ const handler = {
   ): Promise<Response> {
     const url = new URL(request.url);
     if (isApiPath(url.pathname)) {
-      try {
-        return await api.fetch(request, env, ctx as never);
-      } catch (err) {
-        Sentry.captureException(err);
-        if (err instanceof Error && err.message === "db_unbound") {
-          return Response.json({ error: "db_unbound" }, { status: 503 });
-        }
-        return Response.json({ error: "internal" }, { status: 500 });
-      }
+      // Handler errors are dispatched by the app's typed onError (lib/errors).
+      return api.fetch(request, env, ctx as never);
     }
     return env.ASSETS.fetch(request);
   },
