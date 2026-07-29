@@ -17,8 +17,8 @@ export function NotesHeader({
       <SyncStatusBadge status={status} locale={locale} />
       <Button
         type="button"
+        variant="muted"
         onClick={() => void onSignOut()}
-        className="bg-slate-700 text-slate-100"
       >
         {t(locale, "signOut")}
       </Button>

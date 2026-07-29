@@ -1,6 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider } from "@tanstack/react-router";
-import { SwUpdatePrompt } from "./lib/sw-update";
 import { router } from "./router";
 
 const queryClient = new QueryClient({
@@ -12,7 +11,6 @@ const queryClient = new QueryClient({
 export function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <SwUpdatePrompt />
       <RouterProvider router={router} />
     </QueryClientProvider>
   );
