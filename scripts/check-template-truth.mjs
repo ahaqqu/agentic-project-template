@@ -93,9 +93,13 @@ for (const scope of ["apps", "packages"]) {
 }
 
 const importerOf = (name) =>
-  new RegExp(
-    `["']${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(/[^"']*)?["']`,
-  ).test(haystack);
+  // Look for the package name used as an import/module specifier, with an
+  // optional subpath. We check quoted prefixes only (e.g. "hono" or "hono/"),
+  // which is enough to distinguish an import from a bare word in prose.
+  haystack.includes(`"${name}"`) ||
+  haystack.includes(`'${name}'`) ||
+  haystack.includes(`"${name}/`) ||
+  haystack.includes(`'${name}/`);
 
 const violations = [];
 let depCount = 0;
