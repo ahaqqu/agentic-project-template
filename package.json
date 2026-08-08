@@ -21,8 +21,8 @@
     "deploy:staging": "bun run build && wrangler deploy -c apps/api/wrangler.toml --env staging",
     "deploy:temp": "bun run build && wrangler deploy -c apps/api/wrangler.toml --env=\"\" --temporary",
     "db:migrate:local": "wrangler d1 migrations apply agentic-template-db --local -c apps/api/wrangler.toml",
-    "template-gate": "bun scripts/template-sync.mjs check",
-    "template-sync": "bun scripts/template-sync.mjs"
+    "template-gate": "bun scripts/template-sync/cli.mjs check",
+    "template-sync": "bun scripts/template-sync/cli.mjs"
   },
   "overrides": {
     "brace-expansion": "5.0.8"

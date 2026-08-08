@@ -1,5 +1,5 @@
 {
-  "upstream": "git@github.com:ahaqqu/agentic-project-template.git",
+  "upstream": "https://github.com/ahaqqu/agentic-project-template.git",
   "overwrite": [
     ".agents/",
     ".github/workflows/",
