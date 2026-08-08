@@ -1,0 +1,47 @@
+name: Template Sync
+on:
+  schedule:
+    - cron: "0 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: latest
+      - run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      - run: bun run template-sync init
+      - run: bun run template-sync update --branch=template-sync
+      - name: Push sync branch
+        run: |
+          if ! git rev-parse --verify -q template-sync >/dev/null; then
+            echo "Nothing to sync"
+            exit 0
+          fi
+          git push --force-with-lease origin template-sync
+      - name: Open sync PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if git diff --quiet origin/main template-sync; then
+            echo "No changes to sync"
+            exit 0
+          fi
+          if gh pr list --head template-sync --state open --json number | grep -q '"number"'; then
+            echo "Sync PR already open"
+            exit 0
+          fi
+          gh pr create --base main --head template-sync \
+            --title "chore: sync template updates" \
+            --body "Automated merge of upstream template changes. Review the diff, then merge and delete the template-sync branch."
