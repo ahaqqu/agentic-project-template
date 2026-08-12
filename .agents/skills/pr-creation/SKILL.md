@@ -69,6 +69,13 @@ Docs updated: `AGENTS.md` / `adr/`, or `None`.
 Any limitations, or `None`.
 ```
 
+## Creating the PR with `gh`
+
+- Use `gh pr create -t "<title>" -F <body-file>` where the body file contains **only the markdown body** (not a JSON payload).
+- **Never** pass a JSON payload file to `gh pr create -F`; it will appear as literal JSON in the PR body.
+- Alternatively, create with `gh pr create -t "<title>" -m "<body>"` and then update with `gh api repos/<owner>/<repo>/pulls/<number> --method PATCH --input <json-file>` where the JSON file has `{"title": "...", "body": "..."}`.
+- Always verify with `gh pr view <number> --json title,body`.
+
 ## Rules
 
 - You MUST NEVER merge your own PR. Submit for human review only.
