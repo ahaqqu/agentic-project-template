@@ -2,9 +2,13 @@ name: Provision Cloudflare resources
 on:
   workflow_dispatch:
 
+# Setting repository secrets requires admin scope, which the default
+# GITHUB_TOKEN lacks. If GH_PAT (a personal access token with repo scope)
+# is set, the workflow auto-sets D1_DATABASE_ID and D1_DATABASE_ID_STAGING.
+# Without GH_PAT, it creates the resources and prints the UUIDs for you
+# to paste into Settings → Secrets manually.
 permissions:
   contents: read
-  secrets: write
 
 jobs:
   provision:
@@ -27,4 +31,6 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # GH_PAT is optional — if set, secrets are auto-created.
+          # If not set, UUIDs are printed for manual entry.
+          GH_TOKEN: ${{ secrets.GH_PAT }}

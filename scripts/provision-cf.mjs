@@ -117,10 +117,20 @@ function ensureR2(name) {
 }
 
 function setGitHubSecret(name, value) {
-  // Uses gh CLI — requires GH_TOKEN or GITHUB_TOKEN env var in CI,
-  // or local gh auth.
-  run(`echo "${value}" | gh secret set "${name}"`, { ignoreError: false });
+  // Uses gh CLI — requires a token with admin/repo scope (GH_PAT).
+  // The default GITHUB_TOKEN in Actions cannot set secrets.
+  const ghToken = process.env.GH_TOKEN;
+  if (!ghToken) {
+    return false;
+  }
+  const result = run(`echo "${value}" | gh secret set "${name}"`, {
+    ignoreError: true,
+  });
+  if (result === null) {
+    return false;
+  }
   console.log(`GitHub secret "${name}" set.`);
+  return true;
 }
 
 function main() {
@@ -147,17 +157,29 @@ function main() {
   ensureR2(prodR2Name);
   ensureR2(stagingR2Name);
 
-  // Set GitHub secrets with the D1 UUIDs
+  // Set GitHub secrets with the D1 UUIDs (if GH_PAT is available)
   console.log("");
-  setGitHubSecret("D1_DATABASE_ID", prodUuid);
-  setGitHubSecret("D1_DATABASE_ID_STAGING", stagingUuid);
+  const prodSecretSet = setGitHubSecret("D1_DATABASE_ID", prodUuid);
+  const stagingSecretSet = setGitHubSecret("D1_DATABASE_ID_STAGING", stagingUuid);
 
   console.log("");
   console.log("Provisioning complete.");
   console.log(`  D1_DATABASE_ID          = ${prodUuid}`);
   console.log(`  D1_DATABASE_ID_STAGING  = ${stagingUuid}`);
   console.log("");
-  console.log("Next: run the Staging or Deploy production workflow to deploy.");
+
+  if (!prodSecretSet || !stagingSecretSet) {
+    console.log("⚠️  Could not auto-set GitHub secrets (no GH_PAT with admin scope).");
+    console.log("    Set these manually in Settings → Secrets and variables → Actions:");
+    console.log(`      D1_DATABASE_ID          = ${prodUuid}`);
+    console.log(`      D1_DATABASE_ID_STAGING  = ${stagingUuid}`);
+    console.log("");
+    console.log("    Or add a GH_PAT secret (personal access token with repo scope)");
+    console.log("    and re-run this workflow to auto-set them.");
+  } else {
+    console.log("All secrets set automatically. Next: run the Staging or Deploy");
+    console.log("production workflow to deploy.");
+  }
 }
 
 main();
