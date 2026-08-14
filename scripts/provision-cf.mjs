@@ -1,17 +1,19 @@
 #!/usr/bin/env bun
 /**
  * One-time provisioning: create Cloudflare D1 databases and R2 buckets,
- * then set the D1 UUIDs as GitHub repository secrets.
+ * then print the D1 UUIDs as copy-pasteable `gh secret set` commands.
  *
  * Reads database/bucket names from apps/api/wrangler.toml so it works for
  * any fork. Requires CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID env
- * vars (set as GitHub secrets). Sets D1_DATABASE_ID and
- * D1_DATABASE_ID_STAGING as GitHub secrets via `gh secret set`.
+ * vars (set as GitHub secrets).
+ *
+ * The default GITHUB_TOKEN in Actions cannot write repository secrets, so
+ * after the first run you set D1_DATABASE_ID and D1_DATABASE_ID_STAGING
+ * once — the script prints the exact commands. Locally (with `gh auth
+ * login`), it sets them automatically.
  *
  * Usage (local):
  *   bun scripts/provision-cf.mjs
- *
- * In CI, the workflow passes GH_TOKEN and CLOUDFLARE_* env vars.
  *
  * Idempotent: if a database or bucket already exists, it reuses it and
  * prints the existing UUID. Safe to re-run.
@@ -115,19 +117,19 @@ function ensureR2(name) {
   }
 }
 
-function setGitHubSecret(name, value) {
-  // Uses gh CLI — requires a token with admin/repo scope (GH_PAT).
-  // The default GITHUB_TOKEN in Actions cannot set secrets.
-  const ghToken = process.env.GH_TOKEN;
-  if (!ghToken) {
+/**
+ * Try to set a GitHub secret via `gh`. In CI, the default GITHUB_TOKEN
+ * lacks admin scope so this will fail — the caller prints fallback
+ * instructions. Locally (with `gh auth login`), this works.
+ */
+function trySetGitHubSecret(name, value) {
+  if (!process.env.GH_TOKEN && !process.env.GITHUB_TOKEN) {
     return false;
   }
   const result = run(`echo "${value}" | gh secret set "${name}"`, {
     ignoreError: true,
   });
-  if (result === null) {
-    return false;
-  }
+  if (result === null) return false;
   console.log(`GitHub secret "${name}" set.`);
   return true;
 }
@@ -156,10 +158,10 @@ function main() {
   ensureR2(prodR2Name);
   ensureR2(stagingR2Name);
 
-  // Set GitHub secrets with the D1 UUIDs (if GH_PAT is available)
+  // Try to set GitHub secrets (works locally with gh auth; fails in CI)
   console.log("");
-  const prodSecretSet = setGitHubSecret("D1_DATABASE_ID", prodUuid);
-  const stagingSecretSet = setGitHubSecret("D1_DATABASE_ID_STAGING", stagingUuid);
+  const prodSecretSet = trySetGitHubSecret("D1_DATABASE_ID", prodUuid);
+  const stagingSecretSet = trySetGitHubSecret("D1_DATABASE_ID_STAGING", stagingUuid);
 
   console.log("");
   console.log("Provisioning complete.");
@@ -168,13 +170,20 @@ function main() {
   console.log("");
 
   if (!prodSecretSet || !stagingSecretSet) {
-    console.log("⚠️  Could not auto-set GitHub secrets (no GH_PAT with admin scope).");
-    console.log("    Set these manually in Settings → Secrets and variables → Actions:");
+    console.log("⚠️  GitHub secrets could not be auto-set.");
+    console.log("    The default GITHUB_TOKEN in Actions cannot write secrets.");
+    console.log("    Run one of these commands from a terminal with gh auth login:");
+    console.log("");
+    console.log(`      echo "${prodUuid}" | gh secret set D1_DATABASE_ID --repo <owner/repo>`);
+    console.log(`      echo "${stagingUuid}" | gh secret set D1_DATABASE_ID_STAGING --repo <owner/repo>`);
+    console.log("");
+    console.log("    Or set them in the browser:");
+    console.log("    Settings → Secrets and variables → Actions → New repository secret");
     console.log(`      D1_DATABASE_ID          = ${prodUuid}`);
     console.log(`      D1_DATABASE_ID_STAGING  = ${stagingUuid}`);
     console.log("");
-    console.log("    Or add a GH_PAT secret (personal access token with repo scope)");
-    console.log("    and re-run this workflow to auto-set them.");
+    console.log("    After setting the secrets, run the Staging or Deploy production");
+    console.log("    workflow to deploy.");
   } else {
     console.log("All secrets set automatically. Next: run the Staging or Deploy");
     console.log("production workflow to deploy.");
