@@ -96,24 +96,23 @@ function ensureD1(name) {
 
 /**
  * Create an R2 bucket, or do nothing if it already exists.
- * `wrangler r2 bucket create` errors if the bucket exists.
+ * `wrangler r2 bucket create` errors with code 10004 if the bucket exists.
+ * `wrangler r2 bucket list` doesn't support --json reliably, so we catch
+ * the "already exists" error instead of pre-checking.
  */
 function ensureR2(name) {
   if (!name) return;
-  const exists = run(`bunx wrangler r2 bucket list --json`, { ignoreError: true });
-  if (exists) {
-    try {
-      const buckets = JSON.parse(exists);
-      if (buckets.some((b) => b.name === name)) {
-        console.log(`R2 "${name}" already exists — reusing.`);
-        return;
-      }
-    } catch {
-      // fall through
+  try {
+    run(`bunx wrangler r2 bucket create "${name}"`);
+    console.log(`R2 "${name}" created.`);
+  } catch (err) {
+    const stderr = err.stderr?.toString() ?? err.message ?? "";
+    if (stderr.includes("already exists") || stderr.includes("10004")) {
+      console.log(`R2 "${name}" already exists — reusing.`);
+    } else {
+      throw err;
     }
   }
-  run(`bunx wrangler r2 bucket create "${name}"`);
-  console.log(`R2 "${name}" created.`);
 }
 
 function setGitHubSecret(name, value) {
