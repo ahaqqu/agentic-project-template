@@ -33,8 +33,6 @@ A working, runnable foundation for building AI-assisted products: a real app plu
 
 The philosophy is documented in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and enforced by [`AGENTS.md`](AGENTS.md). See [`CONTEXT.md`](CONTEXT.md) for a mental model of the repo.
 
-> **Database:** the app talks to **Cloudflare D1** (SQLite-compatible) through the Hono API only — the client never opens a direct DB connection. Migrations are raw SQL in `apps/api/migrations/` (no ORM); the schema is portable to any standard-SQL backend.
-
 ## How it works
 
 ### The stack
