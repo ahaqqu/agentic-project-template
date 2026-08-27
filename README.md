@@ -2,7 +2,7 @@
 
 A working full-stack starter for AI-assisted product development: Cloudflare Workers + React PWA + an agent skill pipeline. It is a real, runnable app — not a toy — built to prove an architecture while giving agents and humans a repeatable path from idea to production.
 
-> **Pluggable infra:** the example runs on Cloudflare, but the platform is swappable by design. Every external dependency (database, object storage, config, logging) sits behind an adapter, so moving to other infrastructure — D1 → Postgres, R2 → S3, Workers → Node — means swapping an implementation, not rewriting the app. See the [Pluggable infra](#pluggable-infra) section.
+> **Pluggable infra:** the example runs on Cloudflare, but the platform is swappable by design. Every external dependency (database, object storage, config, logging) sits behind an adapter in `packages/infra`, so moving to other infrastructure — D1 → Postgres, R2 → S3, Workers → Node — means swapping an implementation, not rewriting the app. See `docs/ARCHITECTURE.md` §8.
 
 ## What it is
 
@@ -97,10 +97,6 @@ flowchart LR
 - **The edge is stateless:** each request carries enough context to merge and persist independently. The client never talks to D1 directly — the API mediates every read and write.
 - **Adapters isolate the platform** (`@app/infra`): a new infra layer is a swap of adapter implementations, not a rewrite of business logic.
 - **The skill pipeline drives every change** end-to-end, from design to ship. Agents and humans follow the same path.
-
-### Pluggable infra
-
-Business logic does not import Cloudflare-specific types or touch environment bindings directly. Every external dependency is hidden behind an adapter interface in `packages/infra` — Logger, ObjectStore, ConfigStore, RateLimiter, the database driver. The template ships a Cloudflare-backed implementation; a project is free to swap any adapter (D1 → Postgres, R2 → S3, Workers → Node, etc.) without rewriting routes, sync, or UI. See `docs/ARCHITECTURE.md` §8 for the full rationale.
 
 ## The agentic workflow
 
