@@ -26,6 +26,7 @@ A working, runnable foundation for building AI-assisted products: a real app plu
 | Problem it solves | How |
 |---|---|
 | Cheap to run and scale from zero | Cloudflare free tier; static assets are unbilled |
+| Not locked into any vendor | Every external dependency sits behind a swappable adapter in `packages/infra` |
 | Works offline, not just online | LWW merge (`@app/local-first`) + IndexedDB + batched `/v1/sync` |
 | Fast on slow hardware | Bundle <200 KB gzip; PWA; cache-first service worker |
 | Ready for AI agents | Valibot contracts, pluggable adapters, ≤300-line files, skill pipeline |
