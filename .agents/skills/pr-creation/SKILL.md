@@ -81,4 +81,5 @@ Any limitations, or `None`.
 - You MUST NEVER merge your own PR. Submit for human review only.
 - You MUST NOT create a PR with a dirty working tree.
 - You MUST create a PR even for trivial changes.
+- You MUST NEVER add a co-author. Do not include a `Co-authored-by:` trailer (or any other co-author attribution) in the PR description or in commit messages. The author must be the human who owns the PR.
 - You MUST reference relevant GitHub issues in the PR description so they close automatically upon merge.
