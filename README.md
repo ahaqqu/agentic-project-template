@@ -174,26 +174,6 @@ For the full rationale, see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). The 
 | `bun run deploy` | Production Worker |
 | `bun run deploy:staging` | Staging |
 
-### API surface
+## Future plans
 
-- `GET /v1/health`
-- `POST /v1/auth/anonymous`
-- `DELETE /v1/auth/me`
-- `GET /v1/notes`
-- `POST /v1/sync`
-- `GET /openapi.json`
-
-## Architecture coverage (template)
-
-| Band | Status |
-|---|---|
-| P0 core (D1, sync, BDD, security CI, Valibot contracts) | Done |
-| P1 (auth session, CORS, adapters/R2, router, PWA, staging workflows) | Done |
-| P2 (lint limits, restore runbook, ZAP/fuzz workflows, quota doc) | Done |
-| P3 except payments (rate limit, account cascade delete) | Done |
-| Payments (Xendit/Polar) | **Omitted** |
-
-## Ops docs
-
-- [`docs/RUNBOOK_RESTORE.md`](docs/RUNBOOK_RESTORE.md) — D1 Time Travel + R2 backups  
-- [`docs/QUOTA.md`](docs/QUOTA.md) — free-tier monitoring  
+- **Payments** (Xendit / Polar) — will be implemented in a follow-up template release behind a single adapter. Until then, consuming projects can wire it in via the `payment-integration` skill; see `AGENTS.md` and `docs/ARCHITECTURE.md` §13.
