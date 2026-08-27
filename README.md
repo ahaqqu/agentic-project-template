@@ -6,18 +6,18 @@ A working full-stack starter for AI-assisted product development: Cloudflare Wor
 
 A working, runnable foundation for building AI-assisted products: a real app plus a pipeline of instructions that lets an AI agent take a feature from idea to shipped code. It's built around a set of principles, and every principle is enforced by an automated gate in CI. A documented principle without a gate does not exist:
 
-- **Cost:** runs on the Cloudflare free tier; static assets are unbilled; client-side compute preferred over server-side.
-- **Local-first:** IndexedDB is the source of truth; LWW CRDT with tombstones; leader-elected sync; server-clock floor prevents skew wins.
-- **Performance:** initial JS bundle under 200 KB gzipped; route-level code splitting; cache-first Service Worker.
-- **Cross-platform:** single codebase reaches web, Android, and iOS as a PWA; `navigator.storage.persist()` defends IndexedDB on iOS.
-- **Polished:** responsive, dense, accessible (axe-gated); optimistic interactions; EN + ID locales via the Intl API.
-- **Secure:** Valibot validates every external boundary; Bearer sessions in D1; secrets via `wrangler secret`; rate-limited at the edge.
-- **Observable:** structured JSON logs with correlation IDs; Cloudflare Analytics + RUM; Sentry is DSN-gated and errors-only.
-- **Maintainable:** adapter seams, raw SQL migrations, monorepo by contract; business logic has no Cloudflare-specific imports.
-- **Available:** graceful degradation under quota pressure; D1 Time Travel for restore (`docs/RUNBOOK_RESTORE.md`); blocking ZAP + Schemathesis against staging.
-- **Reliable:** contracts before code; property tests on the merge; coverage gate > 80%; bundle budget; fuzz and DAST before promotion.
-- **Reproducible:** `flake.nix` pins the toolchain; CI runs the same Bun scripts as local dev.
-- **Agentic:** files ≤ 300 lines / ≤ 5 direct deps; every dependency has an importer; skill pipeline keeps the work reproducible.
+- **Cost:** you can run and scale an app without spending much until you have users paying you.
+- **Local-first:** your app works offline, so users keep using it when the network is poor or absent.
+- **Performance:** it loads and feels fast even on slow devices and connections.
+- **Cross-platform:** one codebase reaches web, Android, and iOS instead of maintaining several.
+- **Polished:** the product feels native and accessible, not like a starter skeleton.
+- **Secure:** users' data and sessions are protected by default, so you don't ship common vulnerabilities.
+- **Observable:** you can see what is failing and why, even before users report it.
+- **Maintainable:** you can change and extend the codebase over time without it becoming a mess.
+- **Available:** the service keeps working under load and can be restored after failures.
+- **Reliable:** changes ship with confidence because tests and checks catch problems early.
+- **Reproducible:** anyone on any machine gets the same setup and the same results.
+- **Agentic:** AI agents can work on the codebase consistently, which is the whole point of this template.
 
 ## Why use it
 
