@@ -1,8 +1,6 @@
 # Agentic Project Template
 
-A working full-stack starter for AI-assisted product development: Cloudflare Workers + React PWA + an agent skill pipeline. It is a real, runnable app — not a toy — built to prove an architecture while giving agents and humans a repeatable path from idea to production.
-
-> **Pluggable infra:** the example runs on Cloudflare, but the platform is swappable by design. Every external dependency (database, object storage, config, logging) sits behind an adapter in `packages/infra`, so moving to other infrastructure — D1 → Postgres, R2 → S3, Workers → Node — means swapping an implementation, not rewriting the app. See `docs/ARCHITECTURE.md` §8.
+A working full-stack starter for AI-assisted product development: Cloudflare Workers + React PWA + an agent skill pipeline. It is a real, runnable app — not a toy — built to prove an architecture while giving agents and humans a repeatable path from idea to production. Cloudflare is the shipped example, but every external dependency is a swappable adapter — moving to other infrastructure is supported by design (see [Why use it](#why-use-it)).
 
 ## What it is
 
