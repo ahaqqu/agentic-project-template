@@ -42,6 +42,8 @@ The philosophy is documented in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) a
 | Edge | Workers + Static Assets + D1 (SQLite) + R2 + Cron |
 | API | Hono `/v1/*` |
 | Web | React 19 + TanStack Router/Query + Tailwind + PWA |
+| Build | Vite |
+| Tooling | Bun · TypeScript · Wrangler |
 | Contracts | Valibot (`packages/contracts`) + hono-openapi |
 | Sync | `mergeNotes` + leader election + BroadcastChannel |
 | Infra | Pluggable adapters — Logger, ObjectStore, ConfigStore, RateLimiter |
