@@ -2,17 +2,24 @@
 
 A working full-stack starter for AI-assisted product development: Cloudflare Workers + React PWA + an agent skill pipeline. It is a real, runnable app — not a toy — built to prove an architecture while giving agents and humans a repeatable path from idea to production.
 
-The tracer feature is a local-first **Notes** CRUD app (create / read / update-via-sync / delete) with D1 sync. Payments are intentionally out of scope.
+> **Pluggable infra:** the example runs on Cloudflare, but the platform is swappable by design. Every external dependency (database, object storage, config, logging) sits behind an adapter, so moving to other infrastructure — D1 → Postgres, R2 → S3, Workers → Node — means swapping an implementation, not rewriting the app. See the [Pluggable infra](#pluggable-infra) section.
 
 ## What it is
 
-A monorepo with three moving parts that work together:
+A working, runnable foundation for building AI-assisted products: a real app plus a pipeline of instructions that lets an AI agent take a feature from idea to shipped code. It's built around a set of principles, and every principle is enforced by an automated gate in CI — a documented principle without a gate does not exist:
 
-- **`apps/api`** — a Hono Worker on Cloudflare edge (health, anonymous auth, notes, sync, OpenAPI), backed by D1 + R2 with raw-SQL migrations.
-- **`apps/web`** — a React 19 + TanStack PWA with an offline-first IndexedDB store and a service worker.
-- **`.agents/skills/`** — a library of skill instructions (grill → spec → tickets → plan → implement → test → PR → review → ship) that turn the project into an agentic pipeline.
-
-Every capability is enforced by automated gates in CI — a documented principle without a gate does not exist.
+- **Cost** — runs on the Cloudflare free tier; static assets are unbilled; client-side compute preferred over server-side.
+- **Local-first** — IndexedDB is the source of truth; LWW CRDT with tombstones; leader-elected sync; server-clock floor prevents skew wins.
+- **Performance** — initial JS bundle under 200 KB gzipped; route-level code splitting; cache-first Service Worker.
+- **Cross-platform** — single codebase reaches web, Android, and iOS as a PWA; `navigator.storage.persist()` defends IndexedDB on iOS.
+- **Polished** — responsive, dense, accessible (axe-gated); optimistic interactions; EN + ID locales via the Intl API.
+- **Secure** — Valibot validates every external boundary; Bearer sessions in D1; secrets via `wrangler secret`; rate-limited at the edge.
+- **Observable** — structured JSON logs with correlation IDs; Cloudflare Analytics + RUM; Sentry is DSN-gated and errors-only.
+- **Maintainable** — adapter seams, raw SQL migrations, monorepo by contract; business logic has no Cloudflare-specific imports.
+- **Available** — graceful degradation under quota pressure; D1 Time Travel for restore (`docs/RUNBOOK_RESTORE.md`); blocking ZAP + Schemathesis against staging.
+- **Reliable** — contracts before code; property tests on the merge; coverage gate > 80%; bundle budget; fuzz and DAST before promotion.
+- **Reproducible** — `flake.nix` pins the toolchain; CI runs the same Bun scripts as local dev.
+- **Agentic** — files ≤ 300 lines / ≤ 5 direct deps; every dependency has an importer; skill pipeline keeps the work reproducible.
 
 ## Why use it
 
@@ -94,21 +101,6 @@ flowchart LR
 ### Pluggable infra
 
 Business logic does not import Cloudflare-specific types or touch environment bindings directly. Every external dependency is hidden behind an adapter interface in `packages/infra` — Logger, ObjectStore, ConfigStore, RateLimiter, the database driver. The template ships a Cloudflare-backed implementation; a project is free to swap any adapter (D1 → Postgres, R2 → S3, Workers → Node, etc.) without rewriting routes, sync, or UI. See `docs/ARCHITECTURE.md` §8 for the full rationale.
-
-### Principles in one line each
-
-- **Cost** — runs on the Cloudflare free tier; static assets are unbilled; client-side compute preferred over server-side.
-- **Local-first** — IndexedDB is the source of truth; LWW CRDT with tombstones; leader-elected sync; server-clock floor prevents skew wins.
-- **Performance** — initial JS bundle under 200 KB gzipped; route-level code splitting; cache-first Service Worker.
-- **Cross-platform** — single codebase reaches web, Android, and iOS as a PWA; `navigator.storage.persist()` defends IndexedDB on iOS.
-- **Polished** — responsive, dense, accessible (axe-gated); optimistic interactions; EN + ID locales via the Intl API.
-- **Secure** — Valibot validates every external boundary; Bearer sessions in D1; secrets via `wrangler secret`; rate-limited at the edge.
-- **Observable** — structured JSON logs with correlation IDs; Cloudflare Analytics + RUM; Sentry is DSN-gated and errors-only.
-- **Maintainable** — adapter seams, raw SQL migrations, monorepo by contract; business logic has no Cloudflare-specific imports.
-- **Available** — graceful degradation under quota pressure; D1 Time Travel for restore (`docs/RUNBOOK_RESTORE.md`); blocking ZAP + Schemathesis against staging.
-- **Reliable** — contracts before code; property tests on the merge; coverage gate > 80%; bundle budget; fuzz and DAST before promotion.
-- **Reproducible** — `flake.nix` pins the toolchain; CI runs the same Bun scripts as local dev.
-- **Agentic** — files ≤ 300 lines / ≤ 5 direct deps; every dependency has an importer; skill pipeline keeps the work reproducible.
 
 ## The agentic workflow
 
