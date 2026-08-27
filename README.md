@@ -1,22 +1,36 @@
 # Agentic Project Template
 
-Working full-stack starter for AI-assisted product development: Cloudflare Workers + React PWA + agent skills.
+A working full-stack starter for AI-assisted product development: Cloudflare Workers + React PWA + an agent skill pipeline. It is a real, runnable app — not a toy — built to prove an architecture while giving agents and humans a repeatable path from idea to production.
 
-**Tracer feature:** local-first **Notes** CRUD (create / read / update-via-sync / delete) with D1 sync. Payments are out of scope for this template.
+The tracer feature is a local-first **Notes** CRUD app (create / read / update-via-sync / delete) with D1 sync. Payments are intentionally out of scope.
 
-## Purpose
+## What it is
 
-| Goal | How |
+A monorepo with three moving parts that work together:
+
+- **`apps/api`** — a Hono Worker on Cloudflare edge (health, anonymous auth, notes, sync, OpenAPI), backed by D1 + R2 with raw-SQL migrations.
+- **`apps/web`** — a React 19 + TanStack PWA with an offline-first IndexedDB store and a service worker.
+- **`.agents/skills/`** — a library of skill instructions (grill → spec → tickets → plan → implement → test → PR → review → ship) that turn the project into an agentic pipeline.
+
+Every capability is enforced by automated gates in CI — a documented principle without a gate does not exist.
+
+## Why use it
+
+| Problem it solves | How |
 |---|---|
-| Cheap | Cloudflare free tier |
-| Offline-first | LWW merge (`@app/local-first`) + IndexedDB + batched `/v1/sync` |
-| Fast | Bundle &lt;200 KB gzip; PWA |
-| Agent-ready | Valibot contracts, adapters, ≤300-line files, skill pipeline |
-| Quality | Unit, property, BDD, size-limit, security CI |
+| Cheap to run and scale from zero | Cloudflare free tier; static assets are unbilled |
+| Works offline, not just online | LWW merge (`@app/local-first`) + IndexedDB + batched `/v1/sync` |
+| Fast on slow hardware | Bundle <200 KB gzip; PWA; cache-first service worker |
+| Ready for AI agents | Valibot contracts, pluggable adapters, ≤300-line files, skill pipeline |
+| Quality you can rely on | Unit, property, BDD, size-limit, security CI — all gated |
 
-Docs: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) · [`AGENTS.md`](AGENTS.md) · [`CONTEXT.md`](CONTEXT.md)
+The philosophy is documented in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and enforced by [`AGENTS.md`](AGENTS.md). See [`CONTEXT.md`](CONTEXT.md) for a mental model of the repo.
 
-## Stack
+> **Database:** the app talks to **Cloudflare D1** (SQLite-compatible) through the Hono API only — the client never opens a direct DB connection. Migrations are raw SQL in `apps/api/migrations/` (no ORM); the schema is portable to any standard-SQL backend.
+
+## How it works
+
+### The stack
 
 | Layer | Choice |
 |---|---|
@@ -25,78 +39,12 @@ Docs: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) · [`AGENTS.md`](AGENTS.md)
 | Web | React 19 + TanStack Router/Query + Tailwind + PWA |
 | Contracts | Valibot (`packages/contracts`) + hono-openapi |
 | Sync | `mergeNotes` + leader election + BroadcastChannel |
-| Infra | Pluggable adapters — Logger, ObjectStore, ConfigStore, RateLimiter (see [Pluggable infra](#pluggable-infra)) |
+| Infra | Pluggable adapters — Logger, ObjectStore, ConfigStore, RateLimiter |
 | Auth | Anonymous session in D1 (Bearer); cascade delete |
 | Tests | Vitest + fast-check + Playwright-BDD |
-| Security Checks | Semgrep + OSV-Scanner + gitleaks per PR; ZAP Baseline + Schemathesis on main → staging |
+| Security | Semgrep + OSV-Scanner + gitleaks per PR; ZAP + Schemathesis on staging |
 
-> **Database:** the app talks to **Cloudflare D1** (SQLite-compatible) through the Hono API only — the client never opens a direct DB connection. Migrations are raw SQL in `apps/api/migrations/` (no ORM); the schema is portable to any standard-SQL backend. See [Pluggable infra](#pluggable-infra) for the migration path.
-
-## Setup a new project
-
-```bash
-bun install
-cp .env.example .env   # or create .env with CF tokens
-# edit apps/api/wrangler.toml name + D1/R2 ids if forking
-bunx wrangler d1 create <your-db>          # prints a UUID
-bunx wrangler r2 bucket create <your-bucket>
-bun run db:migrate:local
-bunx wrangler d1 migrations apply DB --remote -c apps/api/wrangler.toml   # uses the binding, not the name
-bun run check && bun run test && bun run e2e
-bun run deploy
-```
-
-`.env` (gitignored):
-
-```bash
-CLOUDFLARE_ACCOUNT_ID=…
-CLOUDFLARE_API_TOKEN=…   # Workers Scripts:Edit, D1:Edit, R2:Edit
-```
-
-> **D1 `database_id`:** `wrangler.toml` ships a `replace-me-with-your-d1-uuid`
-> sentinel. Replace it with the UUID from `wrangler d1 create` before your
-> first remote deploy, or inject the UUID via a CI secret at deploy time
-> (wrangler does not interpolate env vars in `wrangler.toml` — substitute
-> the value before calling `wrangler deploy`). Local dev uses the
-> `preview_database_id` field and is unaffected.
-
-Error tracking is optional and DSN-gated (Sentry free tier). With no DSNs set, the SDKs stay disabled:
-
-```bash
-bunx wrangler secret put SENTRY_DSN    # Worker errors (per env)
-VITE_SENTRY_DSN=… bun run build        # web errors-only; Session Replay is opt-in
-```
-
-### Keep in sync with template updates
-
-Template changes (skills, guardrails, workflows, docs) flow into forked projects via `scripts/template-sync/cli.mjs`. `template-sync.json` declares ownership: **overwrite** paths are template-owned and enforced — `bun run template-gate` (CI) fails on any drift, and syncs always take the template version; **merge** paths (`apps/`, `packages/`, `package.json`, `README.md`, `CONTEXT.md`) merge normally; unlisted paths are project-owned and never synced.
-
-```bash
-bun run template-sync init     # add + fetch the upstream remote (once)
-bun run template-sync check    # gate: fail on template-owned drift
-bun run template-sync update   # merge latest template release (--ref=X to pin)
-bun run template-sync finish   # complete a sync after resolving conflicts
-```
-
-The `template-sync` workflow (`.github/workflows/template-sync.yml`) opens a sync PR weekly. If it reports conflicts, check out the `template-sync` branch, resolve them, then run `bun run template-sync finish`. To sync from a different upstream URL, set the `TEMPLATE_SYNC_UPSTREAM` environment variable. Do not edit `template-sync.json` in a fork: it is template-owned and the gate will flag any drift.
-
-## Develop a product
-
-```
-grill-with-docs → to-spec → to-tickets → plan-review
-  → guided-implementation → writing-tests → pr-creation
-  → code-review → ship
-```
-
-For the full pipeline and when to use each skill, invoke the `agentic-workflow` skill (`.agents/skills/agentic-workflow/SKILL.md`).
-
-Extend **Notes** patterns: contracts in `packages/contracts` → D1 migration + client migration + `SCHEMA_VERSION` → route under `/v1/` → UI route → BDD.
-
-## Pluggable infra
-
-Business logic does not import Cloudflare-specific types or touch environment bindings directly. Every external dependency is hidden behind an adapter interface in `packages/infra` — Logger, ObjectStore, ConfigStore, RateLimiter, the database driver. The template ships a Cloudflare-backed implementation; a project is free to swap any adapter (D1 → Postgres, R2 → S3, Workers → Node, etc.) without rewriting routes, sync, or UI. The monorepo is organised by contract, so the seams are explicit. See `docs/ARCHITECTURE.md` §8 for the full rationale.
-
-## Architecture
+### Runtime flow
 
 ```mermaid
 flowchart LR
@@ -138,14 +86,16 @@ flowchart LR
 
 **Reading the diagram**
 
-- The **client store is the source of truth**: reads and writes succeed offline; sync is opportunistic, never blocking (`docs/ARCHITECTURE.md` §2).
-- The **edge is stateless**: each request carries enough context to merge and persist independently. The client never talks to D1 directly — the API mediates every read and write.
-- **Adapters isolate the platform** (`@app/infra`). A new infra layer is a swap of adapter implementations, not a rewrite of business logic.
-- The **skill pipeline** drives every change end-to-end, from design to ship. Agents and humans follow the same path.
+- **The client store is the source of truth:** reads and writes succeed offline; sync is opportunistic, never blocking (`docs/ARCHITECTURE.md` §2).
+- **The edge is stateless:** each request carries enough context to merge and persist independently. The client never talks to D1 directly — the API mediates every read and write.
+- **Adapters isolate the platform** (`@app/infra`): a new infra layer is a swap of adapter implementations, not a rewrite of business logic.
+- **The skill pipeline drives every change** end-to-end, from design to ship. Agents and humans follow the same path.
 
-## Architecture summary
+### Pluggable infra
 
-For the full rationale, see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). The principles in one line each:
+Business logic does not import Cloudflare-specific types or touch environment bindings directly. Every external dependency is hidden behind an adapter interface in `packages/infra` — Logger, ObjectStore, ConfigStore, RateLimiter, the database driver. The template ships a Cloudflare-backed implementation; a project is free to swap any adapter (D1 → Postgres, R2 → S3, Workers → Node, etc.) without rewriting routes, sync, or UI. See `docs/ARCHITECTURE.md` §8 for the full rationale.
+
+### Principles in one line each
 
 - **Cost** — runs on the Cloudflare free tier; static assets are unbilled; client-side compute preferred over server-side.
 - **Local-first** — IndexedDB is the source of truth; LWW CRDT with tombstones; leader-elected sync; server-clock floor prevents skew wins.
@@ -160,20 +110,23 @@ For the full rationale, see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). The 
 - **Reproducible** — `flake.nix` pins the toolchain; CI runs the same Bun scripts as local dev.
 - **Agentic** — files ≤ 300 lines / ≤ 5 direct deps; every dependency has an importer; skill pipeline keeps the work reproducible.
 
-### Commands
+## The agentic workflow
 
-| Command | Use |
-|---|---|
-| `bun run dev` | Build web + wrangler dev |
-| `bun run check` | Typecheck |
-| `bun run test` | Unit + property + coverage |
-| `bun run e2e` | Playwright-BDD |
-| `bun run size-limit` | Bundle budget |
-| `bun run agentic-limits` | File size / import caps |
-| `bun run truth` | No dependency without an importer |
-| `bun run deploy` | Production Worker |
-| `bun run deploy:staging` | Staging |
+```
+grill-with-docs → to-spec → to-tickets → plan-review
+  → guided-implementation → writing-tests → pr-creation
+  → code-review → ship
+```
+
+For the full pipeline and when to use each skill, invoke the `agentic-workflow` skill (`.agents/skills/agentic-workflow/SKILL.md`). Extend the **Notes** patterns: contracts in `packages/contracts` → D1 migration + client migration + `SCHEMA_VERSION` → route under `/v1/` → UI route → BDD.
 
 ## Future plans
 
 - **Payments** (Xendit / Polar) — will be implemented in a follow-up template release behind a single adapter. Until then, consuming projects can wire it in via the `payment-integration` skill; see `AGENTS.md` and `docs/ARCHITECTURE.md` §13.
+
+## Learn more
+
+- [`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md) — set up, run, and sync this template
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — why the system is built this way
+- [`AGENTS.md`](AGENTS.md) — guardrails for agents
+- [`CONTEXT.md`](CONTEXT.md) — mental model of the repo
