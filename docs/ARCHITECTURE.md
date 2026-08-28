@@ -205,7 +205,10 @@ The development environment is identical on every machine. A new contributor run
 
 This means the dev shell is defined declaratively. Dependencies, compilers, and CLI tools are pinned. The CI environment matches the local environment. Onboarding takes minutes, not hours.
 
-Gated by: CI runs the same Bun scripts as local dev; `flake.nix` pins the toolchain when Nix is available.
+Gated by: CI and agents run the same pinned toolchain as local dev — every
+step goes through `nix develop -c` against the committed `flake.lock`
+(`cachix/install-nix-action` in CI; direnv auto-activation via `.envrc`
+locally; the AGENTS.md Universal rules bind agents to the same entrypoint).
 
 ---
 
@@ -240,10 +243,10 @@ Gated by: `bun run agentic-limits` (300-line / 5-import caps; exemptions only fo
 | UI | shadcn/ui + Tailwind | Owned source, Radix accessibility, build-time only CSS. |
 | PWA | vite-plugin-pwa | Service Worker, manifest, precache, update-prompt flow. |
 | i18n | Build-time translations | English and Indonesian. Intl API for dates, numbers, currency. |
-| Tooling | Bun scripts | `bun run check`/`test`/`build`/`dev` call `tsc`, `vitest`, `vite`, and `wrangler` directly. |
+| Tooling | Bun scripts inside the Nix dev shell | `bun run check`/`test`/`build`/`dev` call `tsc`, `vitest`, `vite`, and `wrangler` directly — with every binary pinned by the committed `flake.lock`. |
 | TypeScript | typescript (strict) | Strict mode. `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`. |
 | Package manager | Bun | Native workspaces. Single lockfile. |
-| Dev environment | Nix Flakes (optional) | Pinned Bun and Wrangler when Nix is available. |
+| Dev environment | Nix Flakes (committed `flake.lock`) | Single toolchain source for local dev, CI, and agents; direnv auto-activation. |
 | Testing | Vitest + Playwright-BDD + fast-check | Unit, E2E, and property-based testing. |
 | Error tracking | Sentry | Client and Worker errors. Errors-only, DSN-gated; Session Replay opt-in. |
 | Log ingestion | Workers Logs | Structured JSON logs via Logger adapter. |

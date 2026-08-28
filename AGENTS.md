@@ -6,6 +6,7 @@ Task guardrails for AI agents. Read before any task. For philosophy and rational
 
 These apply regardless of whether you are planning, implementing, reviewing, or debugging:
 
+- All project commands run inside the Nix dev shell. `flake.nix` + the committed `flake.lock` are the single source of truth for tool versions — no host-installed or floating toolchains. Interactive shells activate it automatically via direnv (`.envrc`); non-interactive shells (agents, CI, scripts) must prefix commands with `nix develop -c` (e.g. `nix develop -c bun test`). If a tool is missing, add it to the flake's `buildInputs` — in this template repo, since `flake.nix` is template-owned.
 - When touching business logic, you MUST use adapters in `packages/infra`. You MUST NEVER access `env.*` bindings directly.
 - When planning or implementing, you MUST decide whether a module is reusable across forked projects. Shared, project-agnostic logic (adapters, algorithms, protocols) MUST live in a dedicated `packages/<name>` workspace package (e.g. `@app/rate`), never in `apps/` — `apps/` is the per-project composition root (bindings, entrypoints, deploy config) and the part forks own and customize.
 - When adding a dependency, you MUST verify free-tier compatibility. You MUST NEVER add paid services to the critical path.
