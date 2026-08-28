@@ -17,4 +17,7 @@ coverage/
 apps/api/.mf/
 .dev.vars
 
+# direnv cache (nix-direnv GC roots + env dumps)
+.direnv/
+
 .template-sync.pending
