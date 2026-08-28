@@ -10,12 +10,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version: latest
-      - run: bun install --frozen-lockfile
-      - run: bunx playwright install chromium --with-deps
-      - run: bun run build
-      - run: bun run e2e
+      # Toolchain is pinned by the committed flake.lock (single source of
+      # truth with local dev — docs/ARCHITECTURE.md §13), not floating latest.
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+      - run: nix develop -c bun install --frozen-lockfile
+      - run: nix develop -c bunx playwright install chromium --with-deps
+      - run: nix develop -c bun run build
+      - run: nix develop -c bun run e2e
         env:
           CI: true

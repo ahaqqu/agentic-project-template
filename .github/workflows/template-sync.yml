@@ -22,13 +22,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          # Match ci.yml: the sync scripts import workspace packages
-          # (packages/infra, packages/contracts), so deps must be installed
-          # before any template-sync command runs.
-          bun-version: latest
-      - run: bun install --frozen-lockfile
+      # Match ci.yml: the sync scripts import workspace packages
+      # (packages/infra, packages/contracts), so deps must be installed
+      # before any template-sync command runs. The toolchain is pinned by
+      # the committed flake.lock, not floating latest.
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+      - run: nix develop -c bun install --frozen-lockfile
       - run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -39,7 +38,7 @@ jobs:
         run: |
           default=$(gh api "repos/${GITHUB_REPOSITORY}" --jq '.default_branch')
           echo "branch=${default}" >> "$GITHUB_OUTPUT"
-      - run: bun run template-sync init
+      - run: nix develop -c bun run template-sync init
         env:
           TEMPLATE_SYNC_UPSTREAM: ${{ vars.TEMPLATE_SYNC_UPSTREAM }}
       - name: Require merge commits in repository settings
@@ -53,7 +52,7 @@ jobs:
             exit 1
           fi
           echo "allow_merge=true" >> "$GITHUB_OUTPUT"
-      - run: bun run template-sync update --branch=template-sync
+      - run: nix develop -c bun run template-sync update --branch=template-sync
         env:
           TEMPLATE_SYNC_UPSTREAM: ${{ vars.TEMPLATE_SYNC_UPSTREAM }}
       - name: Push sync branch
