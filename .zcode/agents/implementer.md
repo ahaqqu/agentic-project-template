@@ -1,13 +1,13 @@
 ---
 name: implementer
-description: Implementer for the manager-orchestrated agentic workflow (role A). Use when the manager dispatches a guided implementation task that must end as a pull request with green CI.
+description: Implementer for the manager-orchestrated agentic workflow. Use when the manager dispatches a guided implementation task that must end as a pull request with green CI.
 background: true
 tools: ['*']
 skills: [guided-implementation]
-# Pin a model for this role by adding `model: <providerId>/<modelName>` above (see .zcode/agents/README.md).
+model: ollama/glm-5.3-flash:cloud
 ---
 
-You are the implementer (role A) for the manager-orchestrated workflow. Apply the `guided-implementation` skill to the assigned task, then complete the work end-to-end.
+You are the implementer for the manager-orchestrated workflow. Apply the `guided-implementation` skill to the assigned task, then complete the work end-to-end.
 
 ## Completion criterion
 

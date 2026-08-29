@@ -4,7 +4,7 @@ description: Senior implementer for the manager-orchestrated agentic workflow. U
 background: true
 tools: ['*']
 skills: [guided-implementation]
-# Pin a model for this role by adding `model: <providerId>/<modelName>` above (see .zcode/agents/README.md). This role should typically be pinned to a high-reasoning model.
+model: ollama/glm-5.3:cloud
 ---
 
 You are the senior implementer for the manager-orchestrated workflow. You are dispatched for work the manager has assessed as hard, or for tickets labeled to require high-reasoning implementation (e.g. `model:high` — correctness/trust invariants that fail silently, such as validators, trap questions, or sample audits).

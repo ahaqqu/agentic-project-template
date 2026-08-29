@@ -16,46 +16,46 @@ supplying their own role-agent definitions.
 
 ## Model selection
 
-Model pinning is **opt-in per role**. All template agents ship with no
-`model:` field, so each role inherits the session default — this costs
-nothing to run.
+Every role ships **pinned by default**: each agent file carries a
+`model: <providerId>/<modelName>` field, so the workflow runs on the same
+models everywhere unless you override it.
 
-To pin a model for a role, add `model: <providerId>/<modelName>` to its
-frontmatter. Resolution order (used by ZCode):
+Resolution order (used by ZCode):
 
 1. **User override:** `~/.zcode/agents/<role>.md` (wins — best place for
    personal model choices that shouldn't be committed to the repo).
-2. **Project override:** `<repo>/.zcode/agents/<role>.md` (edit the files in
-   this directory to commit a per-project choice).
-3. **Template default:** inherit the session model (no `model:` field).
+2. **Project pin:** `<repo>/.zcode/agents/<role>.md` (edit the files in
+   this directory to change a per-project choice).
+3. **Template default:** the pinned `model:` in these files (table below).
 
-The two sub-reviewer agents are children of `reviewer`: pinning a model on
-`reviewer` changes the coordinator and the default inherited by the
-sub-reviewers; pin a sub-reviewer's own file only when you want it on a
-different model than the coordinator.
+The two sub-reviewer agents are children of `reviewer`. They are pinned
+separately by default; delete a sub-reviewer's `model:` field to make it
+inherit the coordinator's model instead.
 
 Recognized `model:` values:
 
-- `inherit` — explicitly inherit the session default (equivalent to omitting).
-- `lite` — the harness's configured lite model (cheaper tier; intended for
-  auxiliary roles like `assistant-manager`).
+- `inherit` — explicitly inherit the session default (equivalent to omitting
+  the field).
+- `lite` — the harness's configured lite model (cheaper tier).
 - `<providerId>/<modelName>` — a concrete provider/model ref, e.g.
-  `d5585e04-940a-41f6-a9ec-320bb4fccd7e/deepseek-v4-flash:0731-cloud`.
+  `ollama/glm-5.3:cloud`.
 - A bare `<modelName>` resolved against the session's default provider.
 
 An invalid or unreachable `model:` falls back to the session default; it does
 not hard-fail. Check agent discoverability in ZCode via
 **Settings → Subagents**.
 
-### Suggested defaults per role
+### Pinned defaults per role
 
-| Role | Agent file | Suggested tier |
-| --- | --- | --- |
-| manager | (the session's own model — the manager is the session agent) | strongest available |
-| implementer (A, default) | `implementer.md` | strong — does most of the regular-complexity work |
-| senior-implementer (A, hard/`model:high`) | `senior-implementer.md` | high-reasoning — for tickets where failure is silent (validators, trap questions, sample audits) or assessed as hard by the manager; do not downgrade |
-| reviewer (B) | `reviewer.md` (coordinator; its two sub-reviewers inherit) | strong for depth; different model from A catches more |
-| assistant-manager (C) | `assistant-manager.md` | lite/cheap — fact-finding only |
+| Role | Agent file | Pinned model | Rationale |
+| --- | --- | --- | --- |
+| manager | (the session's own model — the manager is the session agent) | session model | orchestrates, never implements |
+| implementer (default) | `implementer.md` | `ollama/glm-5.3-flash:cloud` | fast tier — does most of the regular-complexity work |
+| senior-implementer (hard/`model:high`) | `senior-implementer.md` | `ollama/glm-5.3:cloud` | stronger tier — tickets where failure is silent (validators, trap questions, sample audits); do not downgrade |
+| reviewer (coordinator) | `reviewer.md` | `ollama/kimi-k2.7-code:cloud` | coordinates the review and posts findings |
+| thermo-nuclear-review-subagent | `thermo-nuclear-review-subagent.md` | `ollama/glm-5.3:cloud` | security/correctness pass |
+| thermo-nuclear-code-quality-review-subagent | `thermo-nuclear-code-quality-review-subagent.md` | `ollama/kimi-k2.7-code:cloud` | maintainability pass |
+| assistant-manager | `assistant-manager.md` | `ollama/kimi-k2.7-code:cloud` | read-only fact-finding and adjudication evidence |
 
 ## Adapting to another harness (e.g. DeepSeek)
 

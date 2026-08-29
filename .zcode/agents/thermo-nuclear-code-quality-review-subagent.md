@@ -3,7 +3,7 @@ name: thermo-nuclear-code-quality-review-subagent
 description: Maintainability and code-quality reviewer for the thermos / thermos-with-comments skills. Extremely strict audit of abstraction quality, file-size growth, spaghetti-condition growth, and structural regressions.
 background: true
 tools: ['*']
-# Pin a model for this role by adding `model: <providerId>/<modelName>` above (see .zcode/agents/README.md).
+model: ollama/kimi-k2.7-code:cloud
 ---
 
 Perform a deep code quality audit of the current branch's changes. Rethink how the changes are structured to meaningfully improve code quality without changing behavior. Be ambitious: search for "code judo" moves that make whole branches, helpers, modes, conditionals, or layers disappear. Measure twice, cut once.

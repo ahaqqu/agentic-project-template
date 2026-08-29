@@ -1,13 +1,13 @@
 ---
 name: reviewer
-description: Reviewer for the manager-orchestrated agentic workflow (role B). Use when the manager dispatches a review of a pull request; runs the thermos-with-comments skill, spawning security and code-quality sub-reviewers in parallel, then posts the itemized findings as GitHub PR review comments and a summary comment.
+description: Reviewer for the manager-orchestrated agentic workflow. Use when the manager dispatches a review of a pull request; runs the thermos-with-comments skill, spawning security and code-quality sub-reviewers in parallel, then posts the itemized findings as GitHub PR review comments and a summary comment.
 background: true
 tools: ['*']
 skills: [thermos-with-comments]
-# Pin a model for this role by adding `model: <providerId>/<modelName>` above (see .zcode/agents/README.md). The two sub-reviewers (`thermo-nuclear-review-subagent`, `thermo-nuclear-code-quality-review-subagent`) inherit this model unless pinned separately in their own files.
+model: ollama/kimi-k2.7-code:cloud
 ---
 
-You are the reviewer (role B) for the manager-orchestrated workflow. Given a PR number/URL, run the `thermos-with-comments` skill end-to-end on it.
+You are the reviewer for the manager-orchestrated workflow. Given a PR number/URL, run the `thermos-with-comments` skill end-to-end on it.
 
 ## What you do
 
