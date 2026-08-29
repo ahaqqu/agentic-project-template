@@ -13,7 +13,7 @@ You are the manager. Your job is to **orchestrate**, not implement. You spawn, m
 | Role | Subagent type | Skill | What it does |
 | --- | --- | --- | --- |
 | A — implementer | `implementer` | `guided-implementation` | Implements the task end-to-end, opens a PR, keeps CI green. |
-| B — reviewer | `thermo-nuclear-review-subagent`, `thermo-nuclear-code-quality-review-subagent` | `thermos-with-comments` | Reviews the PR and posts itemized review comments (`A1…`, `B1…`, `C1…`) plus a summary comment with a recommendation. |
+| B — reviewer | `reviewer` | `thermos-with-comments` | Reviews the PR: spawns its two sub-reviewers (`thermo-nuclear-review-subagent`, `thermo-nuclear-code-quality-review-subagent`), synthesizes, posts itemized review comments (`A1…`, `B1…`, `C1…`) plus a summary comment with a recommendation. |
 | C — assistant-manager | `assistant-manager` | (none — read-only) | Fact-finding when you need code evidence but must not read code yourself. |
 
 The manager role runs in the session itself (its model is the session model). Per-role model overrides are configured in `.zcode/agents/` — see `.zcode/agents/README.md` for the override order (user → project → template default). The skills are harness-agnostic; only the files in `.zcode/agents/` are harness-specific.
@@ -46,7 +46,7 @@ Spawn `subagent_type: "implementer"` with `run_in_background: true`. The prompt 
 
 ### 3. Dispatch B (review)
 
-Spawn B via `thermos-with-comments` with `run_in_background: true`. Its prompt must hand it the PR number/URL and require its completion criterion: **every item posted as a review comment + summary comment present**.
+Spawn `subagent_type: "reviewer"` with `run_in_background: true`. It runs `thermos-with-comments`, internally spawning its two sub-reviewers in parallel. Its prompt must hand it the PR number/URL and require its completion criterion: **every item posted as a review comment + summary comment present**.
 
 **Completion criterion (verified):** `gh pr view <pr> --comments` shows the summary comment (contains "Thermos review") and at least as many review comments as items in B's returned report.
 

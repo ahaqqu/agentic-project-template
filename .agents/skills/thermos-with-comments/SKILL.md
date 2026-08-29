@@ -11,7 +11,7 @@ The review standards are inherited from `thermo-nuclear-review/SKILL.md` (securi
 
 ## Reviewer subagent types
 
-Dispatch `subagent_type: "thermo-nuclear-review-subagent"` for security/correctness and `subagent_type: "thermo-nuclear-code-quality-review-subagent"` for maintainability. Both are defined as role agents in `.zcode/agents/`; if a harness lacks these types, fall back to its generic subagent and inline the prompts from the two sibling skills.
+This skill is designed to run inside a `reviewer` coordinator subagent (`.zcode/agents/reviewer.md`), which dispatches two sub-reviewers in parallel: `subagent_type: "thermo-nuclear-review-subagent"` for security/correctness and `subagent_type: "thermo-nuclear-code-quality-review-subagent"` for maintainability. All three are defined as role agents in `.zcode/agents/`; the two sub-reviewers inherit the `reviewer` model unless pinned separately in their own files. If a harness lacks these types, fall back to its generic subagent and inline the prompts from the two sibling skills.
 
 ## Workflow
 

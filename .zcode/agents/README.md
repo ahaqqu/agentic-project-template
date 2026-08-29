@@ -2,10 +2,12 @@
 
 These files are the ZCode adapter layer for the manager-orchestrated workflow
 in `.agents/skills/manager/SKILL.md`. Each role the manager dispatches
-(`implementer`, `thermo-nuclear-review-subagent`,
-`thermo-nuclear-code-quality-review-subagent`, `assistant-manager`) is a
-defined subagent whose body carries its operating persona and completion
-criterion.
+(`implementer`, `reviewer`, `assistant-manager`) is a defined subagent whose
+body carries its operating persona and completion criterion. The `reviewer`
+is itself a coordinator: it internally dispatches two sub-reviewers
+(`thermo-nuclear-review-subagent` for security/correctness,
+`thermo-nuclear-code-quality-review-subagent` for code quality) following the
+`thermos-with-comments` skill.
 
 These files are the **only** harness-specific part of the workflow. The skills
 in `.agents/skills/` are intentionally harness-agnostic so forks can run the
@@ -27,6 +29,11 @@ frontmatter. Resolution order (used by ZCode):
    this directory to commit a per-project choice).
 3. **Template default:** inherit the session model (no `model:` field).
 
+The two sub-reviewer agents are children of `reviewer`: pinning a model on
+`reviewer` changes the coordinator and the default inherited by the
+sub-reviewers; pin a sub-reviewer's own file only when you want it on a
+different model than the coordinator.
+
 Recognized `model:` values:
 
 - `inherit` — explicitly inherit the session default (equivalent to omitting).
@@ -46,7 +53,7 @@ not hard-fail. Check agent discoverability in ZCode via
 | --- | --- | --- |
 | manager | (the session's own model — the manager is the session agent) | strongest available |
 | implementer (A) | `implementer.md` | strong — does most of the work |
-| reviewer (B) | `thermo-nuclear-review-subagent.md`, `thermo-nuclear-code-quality-review-subagent.md` | strong for depth; different model from A catches more |
+| reviewer (B) | `reviewer.md` (coordinator; its two sub-reviewers inherit) | strong for depth; different model from A catches more |
 | assistant-manager (C) | `assistant-manager.md` | lite/cheap — fact-finding only |
 
 ## Adapting to another harness (e.g. DeepSeek)
@@ -64,3 +71,4 @@ role agents** in that harness's agent-definition directory, translating the
 frontmatter model key to that harness's convention. **DeepSeek support is
 documented but unverified** — no DeepSeek CLI is currently installed, so this
 recipe has not been validated against it.
+
