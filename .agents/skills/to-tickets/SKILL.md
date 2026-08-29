@@ -66,11 +66,11 @@ Publish the approved tickets. **How** depends on the project's issue tracker —
 
 Apply a **model routing label** to every published ticket so downstream agents (see `.agents/skills/manager/SKILL.md`) dispatch the right implementation model. The label states a *requirement* (`model:high` is a floor — do not downgrade), not a cost ceiling:
 
-- **`model:high`** — the ticket has an acceptance criterion that includes a **validator**, a **trap question**, or a **sample audit**: any check whose failure is silent without a high-reasoning implementation pass. (On KajianQ this covers validators, trap questions, and sample audits.)
-- **`model:plus-human`** — an acceptance criterion requires **owner verification or human review/curation**. Code alone never closes the ticket. (On KajianQ: Principle Index changes, complete-works bibliographies, Golden Set trap design.)
+- **`model:high`** — an acceptance criterion whose failure would be silent on a medium tier: a check the implementation can nominally "pass" while missing the point (e.g. a validator that must reject adversarial input, a trap question that must stay unguessable, an audit against a known-good sample).
+- **`model:plus-human`** — an acceptance criterion requires **owner verification or human review/curation**. Code alone never closes the ticket.
 - **No label** — default tier: medium/cheap-tier model acceptable.
 
-The heuristic above is generic; forked projects extend it with their own domain rules in this section of their `to-tickets` file (e.g. KajianQ's Principle Index / bibliography cases). When the user's request references a specific repo's label rules (e.g. "Ticket labels on ahaqqu/KajianQ …"), apply those rules exactly for that repo and add repo-specific examples in that repo's fork.
+These heuristics are template-generic. Domain-specific routing rules belong in project-owned surfaces — the fork's `CONTEXT.md` (a template-sync merge path) or its tracker's label documentation — never in this file: `.agents/` is template-owned (`overwrite` in `template-sync.json`), so editing it in a fork fails `bun run template-gate`. Before labeling, check the project's `CONTEXT.md` and the user's request for such rules, and apply them on top of the heuristics above.
 
 Work the **frontier**: any ticket whose blockers are all done. For a purely linear chain that means top to bottom.
 
