@@ -29,6 +29,10 @@ For the recommended end-to-end pipeline and when to use each skill, invoke the `
 
 For autonomous, multi-agent orchestration of the implement → review → fix loop, invoke the `manager` skill (`manager/SKILL.md`). It spawns role subagents (implementer, reviewer, assistant-manager), monitors until the PR is green, relays itemized review findings, and recommends next steps. Role models are configured in `.zcode/agents/` (see `.zcode/agents/README.md` for override order and DeepSeek/other-harness adaptation).
 
+## Skill authoring
+
+When creating or editing a skill (or this file), load `.agents/skills/writing-for-agents/SKILL.md` — the craft reference; its `SKILL-MECHANICS.md` covers invocation and router skills, and `TIERS.md` this template's conventions: skills are **entry** (indexed here) or **library** (reached only through a parent — library header line, trigger-free description, never indexed); vendored skill bodies stay byte-faithful; every `SKILL.md` frontmatter carries `source` / `upstream` / `modified` / `synced` provenance.
+
 ## Prior to implementation
 
 See `.agents/skills/grill-with-docs/SKILL.md` — sharpen designs through structured interview; produce ADRs and glossary.
