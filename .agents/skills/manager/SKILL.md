@@ -12,7 +12,8 @@ You are the manager. Your job is to **orchestrate**, not implement. You spawn, m
 
 | Role | Subagent type | Skill | What it does |
 | --- | --- | --- | --- |
-| A — implementer | `implementer` | `guided-implementation` | Implements the task end-to-end, opens a PR, keeps CI green. |
+| A — implementer | `implementer` | `guided-implementation` | Implements regular/complexity-normal tasks end-to-end, opens a PR, keeps CI green. |
+| A — senior-implementer | `senior-implementer` | `guided-implementation` | Implements tickets labeled `model:high` or assessed as hard; works the correctness/trust invariant first and designs for verification. See Dispatch decision below. |
 | B — reviewer | `reviewer` | `thermos-with-comments` | Reviews the PR: spawns its two sub-reviewers (`thermo-nuclear-review-subagent`, `thermo-nuclear-code-quality-review-subagent`), synthesizes, posts itemized review comments (`A1…`, `B1…`, `C1…`) plus a summary comment with a recommendation. |
 | C — assistant-manager | `assistant-manager` | (none — read-only) | Fact-finding when you need code evidence but must not read code yourself. |
 
@@ -34,9 +35,19 @@ The manager role runs in the session itself (its model is the session model). Pe
 
 ### 1. Dispatch A (implement)
 
-Spawn `subagent_type: "implementer"` with `run_in_background: true`. The prompt must state: the task, the Definition of Done in `AGENTS.md`, that the completion criterion is **PR URL + `gh pr checks` green**, and that it must apply `guided-implementation`.
+Choose the implementer type using the **dispatch decision** below, then spawn it with `run_in_background: true`. The prompt must state: the task, the Definition of Done in `AGENTS.md`, that the completion criterion is **PR URL + `gh pr checks` green**, and that it must apply `guided-implementation`. For a `senior-implementer` dispatch, also require it to lead with the invariant and design-for-verification statement.
 
-**Completion criterion (verified):** A returns a PR URL; `gh pr view <url>` confirms the PR exists and is open.
+**Completion criterion (verified):** the implementer returns a PR URL; `gh pr view <url>` confirms the PR exists and is open.
+
+#### Dispatch decision: implementer vs senior-implementer
+
+Pick the implementer type by **label first, then judgment**, exactly once per ticket at dispatch time (this decides which subagent_type to spawn; it does not change either agent's definition):
+
+- If the ticket is labeled **`model:high`** → spawn `senior-implementer`. These tickets carry a correctness/trust invariant that fails silently; do not downgrade them.
+- If the ticket has no model label → use your own judgment: spawn `senior-implementer` when you assess the work as hard (cross-cutting change, correctness/trust risk, or a silent-failure mode not yet codified as a label), otherwise spawn `implementer`. Record why in the final summary.
+- If the ticket is labeled **`model:plus-human`** → do not dispatch implementation at all. A human curation/verification gate holds an acceptance criterion; the ticket cannot be closed by code. Escalate to the user instead.
+
+The `model:` ticket labels are produced by the `to-tickets` skill when tickets are published (`.agents/skills/to-tickets/SKILL.md`); the manager consumes them, never invents them.
 
 ### 2. Monitor A's CI
 
@@ -71,6 +82,7 @@ Send A: B's full itemized report (verbatim), and these instructions:
 Produce the final user-facing summary:
 
 - **What happened**: scope, what A implemented, the PR URL, CI history (red→green transitions if any).
+- **Dispatch rationale**: which implementer type you spawned for this ticket (implementer vs senior-implementer) and why (label or judgment).
 - **Review outcome**: B's recommendation, item counts by priority, and the final accept/reject disposition per item.
 - **Workflow observations**: what went smoothly, what stalled, what required retries or C's adjudication.
 - **Next-step recommendation**: e.g. merge (with the code-review philosophy pass), follow-up tickets, or escalating a rejected-High to the user.

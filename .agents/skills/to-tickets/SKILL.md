@@ -62,6 +62,16 @@ Publish the approved tickets. **How** depends on the project's issue tracker —
 - **Local files** → write one file per ticket under `.scratch/<feature-slug>/issues/<NN>-<slug>.md`, numbered from `01` in dependency order (blockers first). Each file's "Blocked by" lists the numbers/titles it depends on. Use the per-ticket file template below — one ticket per file, never a single combined file.
 - **A real issue tracker (GitHub, Linear, …)** → publish one issue per ticket in dependency order (blockers first) so each ticket's blocking edges can reference real identifiers. Use the platform's native blocking / sub-issue relationship where it has one; otherwise set each ticket's "Blocked by" to the blocking issues. Apply the `ready-for-agent` triage label unless instructed otherwise — the tickets are agent-grabbable by construction.
 
+#### Model routing labels
+
+Apply a **model routing label** to every published ticket so downstream agents (see `.agents/skills/manager/SKILL.md`) dispatch the right implementation model. The label states a *requirement* (`model:high` is a floor — do not downgrade), not a cost ceiling:
+
+- **`model:high`** — the ticket has an acceptance criterion that includes a **validator**, a **trap question**, or a **sample audit**: any check whose failure is silent without a high-reasoning implementation pass. (On KajianQ this covers validators, trap questions, and sample audits.)
+- **`model:plus-human`** — an acceptance criterion requires **owner verification or human review/curation**. Code alone never closes the ticket. (On KajianQ: Principle Index changes, complete-works bibliographies, Golden Set trap design.)
+- **No label** — default tier: medium/cheap-tier model acceptable.
+
+The heuristic above is generic; forked projects extend it with their own domain rules in this section of their `to-tickets` file (e.g. KajianQ's Principle Index / bibliography cases). When the user's request references a specific repo's label rules (e.g. "Ticket labels on ahaqqu/KajianQ …"), apply those rules exactly for that repo and add repo-specific examples in that repo's fork.
+
 Work the **frontier**: any ticket whose blockers are all done. For a purely linear chain that means top to bottom.
 
 Do NOT close or modify any parent issue.

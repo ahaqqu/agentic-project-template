@@ -52,7 +52,8 @@ not hard-fail. Check agent discoverability in ZCode via
 | Role | Agent file | Suggested tier |
 | --- | --- | --- |
 | manager | (the session's own model — the manager is the session agent) | strongest available |
-| implementer (A) | `implementer.md` | strong — does most of the work |
+| implementer (A, default) | `implementer.md` | strong — does most of the regular-complexity work |
+| senior-implementer (A, hard/`model:high`) | `senior-implementer.md` | high-reasoning — for tickets where failure is silent (validators, trap questions, sample audits) or assessed as hard by the manager; do not downgrade |
 | reviewer (B) | `reviewer.md` (coordinator; its two sub-reviewers inherit) | strong for depth; different model from A catches more |
 | assistant-manager (C) | `assistant-manager.md` | lite/cheap — fact-finding only |
 
