@@ -1,0 +1,21 @@
+{
+  "hooks": {
+    "enabled": true,
+    "events": {
+      "Stop": [
+        {
+          "hooks": [
+            {
+              "type": "process",
+              "command": "bun",
+              "args": ["${ZCODE_PROJECT_DIR}/scripts/agent-usage-metadata/hook.mjs"],
+              "enabled": true,
+              "timeoutMs": 30000,
+              "statusMessage": "Recording subagent token usage in agent metadata"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
