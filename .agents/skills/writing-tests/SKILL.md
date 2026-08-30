@@ -61,7 +61,7 @@ Webhook idempotency (same payload twice = same state as once) is a mandatory pro
 
 ### Integration tests (adapter boundaries)
 
-- Adapter implementations also get integration tests that exercise the interface contract end to end: against real infrastructure (D1, R2) in CI, or mocks locally — per `docs/ARCHITECTURE.md` §10. The unit-layer contract shape is the `packages/infra/src/object-store.test.ts` exemplar; full-stack real-infra coverage rides the BDD layer (wrangler dev).
+- Adapter implementations also get integration tests that exercise the interface contract end to end: against real infrastructure (D1, R2) in CI, or mocks locally. The unit-layer contract shape is the `packages/infra/src/object-store.test.ts` exemplar; full-stack real-infra coverage rides the BDD layer (wrangler dev).
 
 ## Guards
 
