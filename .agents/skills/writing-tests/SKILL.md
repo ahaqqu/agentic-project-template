@@ -28,8 +28,8 @@ Each pattern below is exemplified by a real, CI-green file in this repo. Cite pa
 
 | Pattern | Exemplary file |
 |---|---|
-| Valibot schema at the boundary: valid, missing-field, and invalid-input cases | `packages/contracts/src/note.test.ts` |
-| Business logic against a mocked adapter interface | `packages/rate/src/rate-limiter.test.ts` |
+| Valibot schema at the boundary: valid, empty, and type-invalid inputs | `packages/contracts/src/note.test.ts` |
+| Business logic over injected dependencies: clock injection and hand-written fakes | `packages/rate/src/rate-limiter.test.ts` |
 | Route handlers exercised directly at the unit layer | `apps/api/src/app.test.ts` |
 | Adapter implementation honoring its interface contract (incl. missing-key / delete paths) | `packages/infra/src/object-store.test.ts` |
 | Sync merge properties: idempotency, associativity, delete-wins | `packages/local-first/src/merge.prop.test.ts` |
@@ -55,8 +55,13 @@ Webhook idempotency (same payload twice = same state as once) is a mandatory pro
 
 ### BDD tests (Playwright-BDD)
 
-- Every user-facing flow per the AGENTS.md Definition of Done, including offline and error states; scenarios describe what the user does and sees.
+- Every user-facing flow per the AGENTS.md Definition of Done; scenarios describe what the user does and sees.
+- Enumerate each user story into scenarios for: happy path, empty state, error state, offline, and one edge case (e.g. max volume).
 - Features in `tests/features/<feature>.feature`, steps in `tests/steps/<feature>.steps.ts` (see the notes exemplar).
+
+### Integration tests (adapter boundaries)
+
+- Adapter implementations also get integration tests that exercise the interface contract end to end: against real infrastructure (D1, R2) in CI, or mocks locally — per `docs/ARCHITECTURE.md` §10. The unit-layer contract shape is the `packages/infra/src/object-store.test.ts` exemplar; full-stack real-infra coverage rides the BDD layer (wrangler dev).
 
 ## Guards
 

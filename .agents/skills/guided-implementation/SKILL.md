@@ -16,7 +16,7 @@ Use this skill when implementing a plan that is unclear, complex, or may affect 
 2. Read `AGENTS.md` for universal guardrails.
 3. Read `docs/ARCHITECTURE.md` fully (including §14 Tooling) to verify alignment.
 4. Review the domain checklist below for the areas your plan touches.
-5. List implementation steps: contracts → implementation → tests → validation.
+5. List implementation steps: contracts and test intent → implementation → test files → validation.
 6. Highlight deviations. Do not start until the user confirms.
 
 ## Domain checklist
@@ -46,7 +46,7 @@ For each area the plan touches, verify compliance before writing code.
 - [ ] Requests include `schemaVersion` and `clientVersion`.
 - [ ] Merge logic is idempotent, commutative (including exact-timestamp ties), and propagates deletes.
 - [ ] Multi-tab: single leader elected. Peers receive state via BroadcastChannel.
-- [ ] Property tests added for idempotency, commutativity, associativity, delete-wins, and GC safety. See `.agents/skills/writing-tests/SKILL.md`.
+- [ ] Property tests added for idempotency, commutativity, associativity, delete-wins, and GC safety. See `.agents/skills/writing-tests/SKILL.md` (load it in the test phase, Phase boundary 2).
 
 ### Components
 
@@ -79,14 +79,16 @@ For each area the plan touches, verify compliance before writing code.
 - [ ] Unit tests (Vitest) for all business logic, schemas, store queries.
 - [ ] Property tests (fast-check) for sync merge, client migrations, webhook idempotency.
 - [ ] BDD tests (Playwright-BDD) for user-facing flows, offline-to-online sync.
-- [ ] Coverage above 80%. See `.agents/skills/writing-tests/SKILL.md` for patterns.
+- [ ] Coverage above 80%. See `.agents/skills/writing-tests/SKILL.md` for patterns (load it in the test phase, Phase boundary 2).
 
 ## During implementation
 
 - Write contracts (Valibot schemas, types) before implementation.
-- Implementation first, tests second: the `writing-tests` skill loads only when
-  the run enters the test phase (Phase boundary 2) — never before code exists
-  to test.
+- Test intent ships with the contracts: name the cases before code exists, per
+  `docs/ARCHITECTURE.md` §10 ("contracts, types, and tests exist before
+  code"). What defers to the test phase (Phase boundary 2) is the
+  `writing-tests` skill load and the authoring of the test files — the
+  artifacts still obey §10.
 - When deviating from the plan, pause and ask for approval.
 - When touching architecture, pause and ask for approval.
 - Checkpoint commit at every test-green point (see below) — never batch all commits to the end.
