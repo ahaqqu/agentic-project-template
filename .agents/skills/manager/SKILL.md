@@ -83,7 +83,7 @@ Send A: B's full itemized report (verbatim), and these instructions:
 4. Post a **resolution report** as a PR comment listing each item ID, its disposition, and the commit that fixed it (for accepted items).
 5. Report back: PR URL, item dispositions, final `gh pr checks` status.
 
-### 5. Monitor A's fix loop
+### 5. Verify A's fix loop
 
 - Wait for A's resolution report comment (verify with `gh pr view --comments`).
 - Verify `gh pr checks <pr>` is green after A's fixes.
