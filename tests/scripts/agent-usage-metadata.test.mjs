@@ -52,14 +52,14 @@ describe("parseHookPayload", () => {
       tool_use_id: "call_1",
       tool_input: { task_id: AGENT_ID },
     });
-    expect(parseHookPayload(withPrefix)).toEqual({ ok: true, event: "PostToolUse", agentId: AGENT_ID });
+    expect(parseHookPayload(withPrefix)).toEqual({ ok: true, event: "task-output", agentId: AGENT_ID });
     const bareId = JSON.stringify({
       hook_event_name: "PostToolUse",
       tool_name: "TaskOutput",
       tool_use_id: "call_1",
       tool_input: { task_id: "test" },
     });
-    expect(parseHookPayload(bareId)).toEqual({ ok: true, event: "PostToolUse", agentId: "agent_test" });
+    expect(parseHookPayload(bareId)).toEqual({ ok: true, event: "task-output", agentId: "agent_test" });
   });
 
   it("accepts an Agent PostToolUse payload as a dispatch-completion capture", () => {

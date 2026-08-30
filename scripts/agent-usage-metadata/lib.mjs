@@ -57,7 +57,7 @@ export function parseHookPayload(raw) {
       if (!agentId) {
         return { ok: false, reason: "TaskOutput payload has no agent task_id in tool_input" };
       }
-      return { ok: true, event, agentId };
+      return { ok: true, event: "task-output", agentId };
     }
     if (toolName === "Agent") {
       return { ok: true, event: "agent-dispatch", toolUseId };
