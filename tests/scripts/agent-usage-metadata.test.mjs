@@ -183,3 +183,101 @@ describe("ownedUsageKeys", () => {
     expect(ownedUsageKeys()).toEqual(["usage", "usageCaptures"]);
   });
 });
+
+// End-to-end guard checks: run the real hook entrypoint as a subprocess the
+// same way the workspace-hook runtime does (payload JSON on stdin).
+import { describe as describe2, expect as expect2, it as it2, beforeAll as beforeAll2, afterAll as afterAll2 } from "vitest";
+import { spawnSync } from "node:child_process";
+import { mkdtempSync as mkd2, mkdirSync as mkdir2, copyFileSync as copy2, writeFileSync as write2, readFileSync as read2, rmSync as rm2 } from "node:fs";
+import { tmpdir as tmp2 } from "node:os";
+import { join as join2 } from "node:path";
+import { DatabaseSync as DB } from "node:sqlite";
+import { fileURLToPath } from "node:url";
+
+const HOOK = join2(process.cwd(), "scripts/agent-usage-metadata/hook.mjs");
+
+describe2("hook.mjs failure paths (AC2)", () => {
+  let env;
+  const payload = JSON.stringify({
+    hook_event_name: "PostToolUse",
+    tool_name: "TaskOutput",
+    tool_use_id: "call_probe",
+    tool_input: { task_id: "agent_probe" },
+  });
+
+  beforeAll2(() => {
+    env = mkd2(join2(tmp2(), "hook-guard-"));
+    mkdir2(join2(env, "agents", "sess_parent", "agent_probe"), { recursive: true });
+    copy2(
+      new URL("../../scripts/agent-usage-metadata/hook.mjs", import.meta.url).pathname,
+      join2(env, "hook.mjs"),
+    );
+    copy2(
+      new URL("../../scripts/agent-usage-metadata/lib.mjs", import.meta.url).pathname,
+      join2(env, "lib.mjs"),
+    );
+    // Real DB with one usage row for the child session.
+    const db = new DB(join2(env, "db.sqlite"));
+    db.exec(`create table model_usage (id text primary key, session_id text, provider_id text, model_id text, status text,
+      started_at integer, completed_at integer, duration_ms integer, input_tokens integer, output_tokens integer,
+      reasoning_tokens integer, cache_creation_input_tokens integer, cache_read_input_tokens integer, computed_total_tokens integer)`);
+    db.prepare("insert into model_usage values ('r1','sess_subagent_agent_probe','p','m','completed',1000,6000,5000,100,10,2,0,50,162)").run();
+    db.close();
+  });
+  afterAll2(() => rm2(env, { recursive: true, force: true }));
+
+  function runHook(extraEnv) {
+    return spawnSync("bun", [join2(env, "hook.mjs")], {
+      input: payload,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        ZCODE_AGENTS_DIR: join2(env, "agents"),
+        ZCODE_DB_PATH: join2(env, "db.sqlite"),
+        ZCODE_AGENT_USAGE_LOG: join2(env, "hook.log"),
+        ...extraEnv,
+      },
+    });
+  }
+
+  it2("corrupt metadata.json: never written into; skip is logged; bytes unchanged", () => {
+    const metaPath = join2(env, "agents", "sess_parent", "agent_probe", "metadata.json");
+    const corrupt = '{"childSessionId": "sess_subagent_agent_probe", CORRUPT';
+    write2(metaPath, corrupt);
+    const r = runHook({});
+    // An unparseable record must never be written into: the capture is
+    // skipped with an observable log line and the file keeps its bytes.
+    expect2(r.status).toBe(0);
+    expect2(r.stderr).toContain("skip_no_agent_record");
+    expect2(read2(metaPath, "utf8")).toBe(corrupt);
+  });
+
+  it2("missing telemetry DB: exits 1, logs, metadata untouched", () => {
+    const metaPath = join2(env, "agents", "sess_parent", "agent_probe", "metadata.json");
+    const valid = JSON.stringify({ agentId: "agent_probe", childSessionId: "sess_subagent_agent_probe", status: "completed" });
+    write2(metaPath, valid);
+    const r = runHook({ ZCODE_DB_PATH: join2(env, "missing.sqlite") });
+    expect2(r.status).toBe(1);
+    expect2(r.stderr).toContain("error_db");
+    expect2(read2(metaPath, "utf8")).toBe(valid);
+  });
+
+  it2("happy path: usage lands in metadata and repeats are idempotent", () => {
+    const metaPath = join2(env, "agents", "sess_parent", "agent_probe", "metadata.json");
+    const first = runHook({});
+    expect2(first.status).toBe(0);
+    expect2(first.stderr).toContain("usage_recorded");
+    const after1 = read2(metaPath, "utf8");
+    const once = JSON.parse(after1);
+    expect2(once.usage.inputTokens).toBe(100);
+    expect2(once.usageCaptures).toHaveLength(1);
+    const second = runHook({});
+    expect2(second.status).toBe(0);
+    const rerun = JSON.parse(read2(metaPath, "utf8"));
+    // Same DB state: same fingerprint, still one capture entry, same totals
+    // (capturedAt is the only field allowed to move).
+    expect2(rerun.usageCaptures).toHaveLength(1);
+    expect2(rerun.usageCaptures[0].fingerprint).toBe(once.usageCaptures[0].fingerprint);
+    expect2(rerun.usage.inputTokens).toBe(100);
+  });
+});
