@@ -274,20 +274,11 @@ describe("config and state hardening (lib.mjs)", () => {
     expect(isVerificationCommand("bun run test", mixed.config)).toBe(false);
   });
 
-  // BLOCKED (suspected production bug in scripts/iteration-guardrail/lib.mjs —
-  // reported to the senior, NOT patched here): the brief requires that a
-  // degraded config is still usable, but `isVerificationCommand` runs
-  // `re.test(command)` over `config.verificationPatterns` while every
-  // degraded/default fallback in `normalizeConfig` leaves the STRING patterns
-  // from `defaultConfig()` in place (they are only compiled when the raw
-  // config itself carries a valid patterns array). Classification therefore
-  // throws `TypeError: re.test is not a function` for all of:
-  //   - normalizeConfig(null | 42 | [] | ...)        (non-object input)
-  //   - invalid or empty verificationPatterns        (pattern degradation)
-  //   - a config object without a verificationPatterns key
-  //   - hook.mjs loadConfig's unreadable-file catch  (defaultConfig() directly)
-  // Re-enable this test once lib.mjs compiles its default patterns.
-  it.skip("TRAP (BLOCKED): a degraded config is still usable for classification", () => {
+  // Formerly BLOCKED (production bug found by this suite): string defaults
+  // used to leak into every fallback path, making classification throw.
+  // FIXED by b11cd47 — defaultConfig() now compiles its patterns, so every
+  // degraded config is classification-ready.
+  it("TRAP: a degraded config is still usable for classification", () => {
     expect(isVerificationCommand("bun run test", normalizeConfig(null).config)).toBe(true);
     expect(isVerificationCommand("bun run test", normalizeConfig({ verificationPatterns: [] }).config)).toBe(true);
     expect(isVerificationCommand("bun run test", normalizeConfig({ sameFailureCap: 0 }).config)).toBe(true);
@@ -565,18 +556,11 @@ describe("hook.mjs subprocess (fail-open and deny at the process boundary)", () 
     rmSync(env.dir, { recursive: true, force: true });
   });
 
-  // BLOCKED (same suspected production bug as the skipped case in section C —
-  // reported to the senior, NOT patched here): the brief expects that with a
-  // missing config the caps fall back to defaults and "a stuck loop seeded
-  // against the defaults still denies". Instead, hook.mjs loadConfig's catch
-  // path returns `defaultConfig()` whose verificationPatterns are strings, so
-  // isVerificationCommand throws `TypeError: re.test is not a function`, the
-  // top-level handler emits `error_fatal`, and the hook goes fully INERT
-  // (exit 0 — fail-open, invariant preserved — but no classification, no state
-  // recording, and no deny is ever reachable while the config is missing).
-  // That is a false negative, the silent failure mode the brief calls out.
-  // Re-enable once lib.mjs compiles its default patterns.
-  it.skip("TRAP (BLOCKED): a stuck loop seeded against the default caps still denies with missing config", () => {
+  // Formerly BLOCKED (same production bug as the skipped case in section C):
+  // with a missing config the hook used to go fully inert (error_fatal on
+  // every event, no deny reachable). FIXED by b11cd47 — the default caps
+  // apply and a seeded stuck loop denies again.
+  it("TRAP: a stuck loop seeded against the default caps still denies with missing config", () => {
     const env = newEnv();
     const missing = join(env.dir, "does-not-exist.json");
     const overrides = { ZCODE_GUARDRAIL_CONFIG: missing };
