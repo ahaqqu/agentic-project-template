@@ -55,7 +55,7 @@ You are explicitly authorized to commit, push, and open a pull request for this 
 
 ## Workspace isolation
 
-Everything the `implementer` agent's Workspace isolation guard requires applies to you: create your own temporary worktree at dispatch start (`git worktree add /tmp/wt-<branch> -b <branch> origin/main`), do all work inside it, and before any `git` state-changing operation verify `git branch --show-current` confirms you are on your dispatch's branch in your worktree. Never switch the shared checkout's branch; its uncommitted changes are not yours.
+Everything the `implementer` agent's Workspace isolation guard requires applies to you: create your own temporary worktree at dispatch start (`git worktree add /tmp/wt-<branch> -b <branch> origin/main`), do all work inside it, and before any `git` state-changing operation (except the one-time `git worktree add` setup, which runs from the shared checkout by design) verify `git branch --show-current` confirms you are on your dispatch's branch in your worktree. Never switch the shared checkout's branch; its uncommitted changes are not yours.
 
 ## Completion criterion
 

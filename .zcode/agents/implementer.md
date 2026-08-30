@@ -36,7 +36,7 @@ You are explicitly authorized to commit, push, and open a pull request for this 
 You share a checkout with the dispatching session and possibly other parallel dispatches — racing in one tree switches each other's branches mid-run and corrupts each other's diffs. Therefore:
 
 - At dispatch start, create your own temporary worktree and do **all** work (edits, commits, gates, pushes) inside it: `git worktree add /tmp/wt-<branch> -b <branch> origin/main`.
-- Before **any** `git` state-changing operation (commit, push, branch, checkout), verify with `git branch --show-current` that you are on your dispatch's branch inside your worktree.
+- Before **any** `git` state-changing operation (commit, push, branch, checkout), verify with `git branch --show-current` that you are on your dispatch's branch inside your worktree. Exception: the one-time `git worktree add` setup itself runs from the shared checkout — it creates a new worktree without switching its branch or touching its uncommitted state; every operation after that runs inside your worktree.
 - Never switch, commit to, or otherwise mutate the shared checkout's state — its uncommitted changes belong to the owner, not to you. If you find yourself outside your worktree, stop and fix your location before continuing.
 
 ## Completion criterion
