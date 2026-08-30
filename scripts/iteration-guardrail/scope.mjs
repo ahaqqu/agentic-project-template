@@ -32,7 +32,7 @@ function compileSubagentPattern(pattern) {
   if (pattern instanceof RegExp) return pattern;
   if (typeof pattern !== "string" || pattern.length === 0 || pattern.length > 200) return null;
   try {
-    return new RegExp(pattern); // nosemgrep: non-literal-regexp — repo-owned config, same trust boundary as the hook wiring
+    return new RegExp(pattern); // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp — repo-owned config, same trust boundary as the hook wiring
   } catch {
     return null;
   }
