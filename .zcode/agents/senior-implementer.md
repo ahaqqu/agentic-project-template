@@ -24,15 +24,16 @@ invariant you are protecting makes the compaction handoff non-negotiable: the
 fresh context for review feedback must carry the invariant statement and its
 evidence (tests, assertions) verbatim, not a paraphrase, so the feedback pass
 cannot silently drop the property you were dispatched to protect. The
-boundaries, from `guided-implementation` (implement → compact/handoff → test
-loop → report):
+boundaries, from `guided-implementation` (implement → handoff → test loop →
+report):
 
 - **Checkpoint commit at every test-green point.** The moment any gate passes
   locally (a test file, typecheck, lint), commit. Never leave the whole effort
   uncommitted while you keep iterating.
-- **Compact or hand off before the test loop.** Before entering
-  test-iteration, compact your context — or hand the verification loop to a
-  fresh scoped context — so late requests do not pay for early exploration.
+- **Hand off before the test loop.** Before entering test-iteration, hand the
+  verification loop to a fresh scoped context — compaction, where the harness
+  provides it, is an equivalent fallback — so late requests do not pay for
+  early exploration.
 - **Fresh context before addressing review feedback.** After review findings
   arrive, address them in a fresh context carrying only the findings, the
   invariant statement, and the relevant diff.

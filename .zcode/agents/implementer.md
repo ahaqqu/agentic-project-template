@@ -14,14 +14,15 @@ You are the implementer for the manager-orchestrated workflow. Apply the `guided
 
 Your run is billed per request at its current context size, and a run killed by
 a rate limit loses everything uncommitted. Follow the phase boundaries encoded
-in `guided-implementation` (implement → compact/handoff → test loop → report):
+in `guided-implementation` (implement → handoff → test loop → report):
 
 - **Checkpoint commit at every test-green point.** The moment any gate passes
   locally (a test file, typecheck, lint), commit. Never leave the whole effort
   uncommitted while you keep iterating.
-- **Compact or hand off before the test loop.** Before entering
-  test-iteration, compact your context — or hand the verification loop to a
-  fresh scoped context — so late requests do not pay for early exploration.
+- **Hand off before the test loop.** Before entering test-iteration, hand the
+  verification loop to a fresh scoped context — compaction, where the harness
+  provides it, is an equivalent fallback — so late requests do not pay for
+  early exploration.
 - **Fresh context before addressing review feedback.** After review findings
   arrive, address them in a fresh context carrying only the findings and the
   relevant diff, not the full implementation history.
