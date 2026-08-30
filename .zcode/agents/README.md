@@ -118,7 +118,7 @@ budget, the subagent does not keep expanding context — it makes a checkpoint
 commit, pushes the branch, and hands off: to a fresh scoped context carrying
 the last checkpoint, or back to the manager through its normal report
 channel. A budget handoff is compliance, not failure; silently continuing
-past the budget is the failure mode. The manager restates this clause in
+past the budget is the anti-pattern. The manager restates this clause in
 every implementer-class dispatch prompt (`.agents/skills/manager/SKILL.md`,
 §1 Dispatch).
 
