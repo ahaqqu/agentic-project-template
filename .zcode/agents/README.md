@@ -94,24 +94,18 @@ The implementer-class roles (`implementer`, `senior-implementer`) carry an
 operating discipline in their agent files, mirrored in the
 `guided-implementation` skill (`.agents/skills/guided-implementation/SKILL.md`,
 "Phase boundaries"): run **implement → handoff → test loop → report**
-as explicit phases — checkpoint commit at every test-green point; hand the
-verification loop to a fresh scoped context (compaction, where the harness
-provides it, is equivalent) *before* entering test iteration; address review
-findings in a fresh context *after* review. This exists because of measured
-run behavior, not taste: issue #95's senior-implementer run (session
-`sess_subagent_agent_da680873-b5fb-492a-af08-76a277d27c1e`,
-2026-08-30) billed 38M input tokens over 320 requests, with per-request
-average growing 41k → 95k → 140k → 199k across quartiles — while its five
-checkpoint commits (bffc985, 13fe0ac, c5e2bd7, f028a28, faf033d on
-`feat/agent-usage-metadata`, squash-merged to `main` as `36610c3` via #106)
-show the checkpoint-commit duty being followed in a real dispatch. Issue #95
-further records an earlier run (the #6 senior-implementer run in KajianQ)
-that died on a rate limit with the entire effort uncommitted — this boundary
-exists so a kill loses nothing already checkpointed. Ownership note:
-the skill path is template-owned (`.agents/` is an `overwrite` entry in
-`template-sync.json`), so forks inherit the discipline; `.zcode/agents/` is
-unlisted in that map (project-owned), so this directory is where a fork
-customizes or extends it.
+as explicit phases. Follow all three boundaries:
+
+1. Checkpoint commit at every test-green point.
+2. Hand the verification loop to a fresh scoped context (compaction, where the
+   harness provides it, is equivalent) *before* entering test iteration.
+3. Address review findings in a fresh context *after* review, never in the
+   implementation context.
+
+Ownership note: the skill path is template-owned (`.agents/` is an
+`overwrite` entry in `template-sync.json`), so forks inherit the discipline;
+`.zcode/agents/` is unlisted in that map (project-owned), so this directory
+is where a fork customizes or extends it.
 
 ## Role registry
 

@@ -91,16 +91,11 @@ For each area the plan touches, verify compliance before writing code.
 
 ## Phase boundaries
 
-A run is billed per request at its current context size, so the last quartile of
-requests costs multiples of the first; and a run killed by a rate limit loses
-everything not yet committed. Real evidence: a senior-implementer run in this
-repo (issue #95, session `sess_subagent_agent_da680873-b5fb-492a-af08-76a277d27c1e`,
-2026-08-30) billed 38M input tokens over 320 requests with per-request average
-growing 41k → 95k → 140k → 199k across quartiles, while its five checkpoint
-commits (bffc985, 13fe0ac, c5e2bd7, f028a28, faf033d) preserved the full
-effort, which landed on `main` via the squash-merge in #106 (`36610c3`). The run
-is therefore a sequence of explicit phases — **implement → handoff →
-test loop → report** — and each boundary below is mandatory, not advisory:
+A run billed per request at its current context size gets expensive fast as the
+context grows, and a run killed by a rate limit loses everything not yet
+committed. An implementer run is therefore a sequence of explicit phases —
+**implement → handoff → test loop → report** — and each boundary below is
+mandatory, not advisory:
 
 1. **Implement phase.** One-pass reads; do not re-read files you already hold,
    and trim command output as you go. Checkpoint commit as soon as any gate
@@ -118,9 +113,6 @@ test loop → report** — and each boundary below is mandatory, not advisory:
    Address review findings in a fresh context (a new scoped subagent;
    compaction, where the harness provides it, is equivalent) that carries the
    findings and the relevant diff — not the whole implementation transcript.
-   The project-owned implementer-class role profiles (e.g.
-   `.zcode/agents/implementer.md`, `.zcode/agents/senior-implementer.md`)
-   encode the same boundaries.
 
 ## After implementation
 
