@@ -88,6 +88,27 @@ not hard-fail. Check agent discoverability in ZCode via
 | thermo-nuclear-code-quality-review-subagent | `thermo-nuclear-code-quality-review-subagent.md` | `ollama/kimi-k2.7-code:cloud` | maintainability pass |
 | assistant-manager | `assistant-manager.md` | `ollama/kimi-k2.7-code:cloud` | read-only fact-finding and adjudication evidence |
 
+## Phase-boundary discipline
+
+The implementer-class roles (`implementer`, `senior-implementer`) carry an
+operating discipline in their agent files, mirrored in the
+`guided-implementation` skill (`.agents/skills/guided-implementation/SKILL.md`,
+"Phase boundaries"): run **implement → compact/handoff → test loop → report**
+as explicit phases — checkpoint commit at every test-green point; compact the
+context or hand the verification loop to a fresh scoped context *before*
+entering test iteration; address review findings in a fresh context *after*
+review. This exists because of measured run behavior, not taste: issue #95's
+senior-implementer run (session `sess_subagent_agent_da680873-b5fb-492a-af08-76a277d27c1e`,
+2026-08-30) billed 38M input tokens over 320 requests, with per-request
+average growing 41k → 95k → 140k → 199k across quartiles — while its five
+checkpoint commits (bffc985, 13fe0ac, c5e2bd7, f028a28, faf033d, on `main`)
+show the checkpoint-commit duty being followed in a real dispatch. An earlier
+run died on a rate limit with the entire effort uncommitted. Ownership note:
+the skill path is template-owned (`.agents/` is an `overwrite` entry in
+`template-sync.json`), so forks inherit the discipline; `.zcode/agents/` is
+unlisted in that map (project-owned), so this directory is where a fork
+customizes or extends it.
+
 ## Role registry
 
 This directory is the role-file home the ZCode harness parses (see the
