@@ -1,11 +1,15 @@
 // Pure logic for the agent-usage-metadata hook (issue #95).
 //
 // Contract (external boundaries this module guards):
-// 1. Hook stdin payload (ZCode workspace-hook runtime, `Stop` event): a JSON
-//    object that MUST carry `hook_event_name: "Stop"` and `session_id`; the
-//    session id identifies a subagent child session
-//    (`sess_subagent_agent_<agentId>`). Anything else is rejected — the hook
-//    is a no-op unless both fields validate.
+// 1. Hook stdin payload (ZCode workspace-hook runtime). Three capture points
+//    are recognized — everything else is a validated no-op:
+//    a. `Stop` in a subagent child session: `session_id` IS the child session
+//       (`sess_subagent_agent_<agentId>`) and its usage rows are final.
+//    b. `PostToolUse` on the `TaskOutput` tool: the manager collected a
+//       background subagent's result; `tool_input.task_id` identifies the
+//       agent record.
+//    c. `PostToolUse` on the `Agent` tool: a foreground dispatch completed;
+//       `tool_use_id` matches the agent record's `parentToolUseId`.
 // 2. Telemetry rows: objects shaped like rows of the `model_usage` table in
 //    ~/.zcode/cli/db/db.sqlite (snake_case token columns + status/timestamps).
 // 3. Agent metadata.json: a JSON object; usage keys are ADDED/REPLACED, every
@@ -19,8 +23,15 @@ function isPlainObject(v) {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
-// Parse + validate the hook payload. Returns {ok:true, sessionId} or
-// {ok:false, reason} — never throws.
+function nonEmptyString(v) {
+  return typeof v === "string" && v.length > 0 ? v : undefined;
+}
+
+// Parse + validate the hook payload. Returns one of:
+//   {ok:true, event:"stop", sessionId}
+//   {ok:true, event:"task-output", agentId}
+//   {ok:true, event:"agent-dispatch", toolUseId}
+//   {ok:false, reason} — never throws.
 export function parseHookPayload(raw) {
   let payload;
   try {
@@ -31,17 +42,38 @@ export function parseHookPayload(raw) {
   if (!isPlainObject(payload)) {
     return { ok: false, reason: "payload is not a JSON object" };
   }
-  if (payload.hook_event_name !== "Stop") {
-    return {
-      ok: false,
-      reason: `unsupported hook_event_name: ${String(payload.hook_event_name)}`,
-    };
+  const event = payload.hook_event_name;
+  if (event === "Stop") {
+    const sessionId = nonEmptyString(payload.session_id);
+    if (!sessionId) return { ok: false, reason: "Stop payload has no session_id" };
+    return { ok: true, event, sessionId };
   }
-  const sessionId = payload.session_id;
-  if (typeof sessionId !== "string" || sessionId.length === 0) {
-    return { ok: false, reason: "payload has no session_id" };
+  if (event === "PostToolUse") {
+    const toolName = payload.tool_name;
+    const toolUseId = nonEmptyString(payload.tool_use_id);
+    if (!toolUseId) return { ok: false, reason: "PostToolUse payload has no tool_use_id" };
+    if (toolName === "TaskOutput") {
+      const agentId = agentIdFromTaskId(payload.tool_input);
+      if (!agentId) {
+        return { ok: false, reason: "TaskOutput payload has no agent task_id in tool_input" };
+      }
+      return { ok: true, event, agentId };
+    }
+    if (toolName === "Agent") {
+      return { ok: true, event: "agent-dispatch", toolUseId };
+    }
+    return { ok: false, reason: `unsupported tool_name: ${String(toolName)}` };
   }
-  return { ok: true, sessionId };
+  return { ok: false, reason: `unsupported hook_event_name: ${String(event)}` };
+}
+
+// TaskOutput's task_id for a subagent dispatch is the agent id (with or
+// without the "agent_" prefix).
+function agentIdFromTaskId(toolInput) {
+  if (!isPlainObject(toolInput)) return undefined;
+  const taskId = nonEmptyString(toolInput.task_id);
+  if (!taskId) return undefined;
+  return taskId.startsWith("agent_") ? taskId : `agent_${taskId}`;
 }
 
 // Query text for model_usage rows of one session. Kept here so the SQL and
@@ -111,7 +143,7 @@ export function computeUsageTotals(sessionId, rows, capturedAt) {
 }
 
 // Stable fingerprint of one capture: used to keep usageCaptures append-only
-// history idempotent across repeated Stop events for the same session state.
+// history idempotent across repeated captures of the same session state.
 export function captureFingerprint(totals) {
   return [
     totals.requestCount,
@@ -126,8 +158,9 @@ export function captureFingerprint(totals) {
 // full replacement document (all pre-existing keys preserved) or throws on a
 // guard violation — the caller must treat a throw as "do not write".
 // - metadataText: the current file content (string) — MUST parse.
-// - expectedChildSessionId: the payload session id — MUST match the record's
-//   childSessionId so a scan collision can never write foreign usage.
+// - expectedChildSessionId: the child session the usage belongs to — MUST
+//   match the record's childSessionId so a scan collision can never write
+//   foreign usage.
 export function mergeUsageIntoMetadata(metadataText, totals) {
   let metadata;
   try {
@@ -140,7 +173,7 @@ export function mergeUsageIntoMetadata(metadataText, totals) {
   }
   if (metadata.childSessionId !== totals.sessionId) {
     throw new Error(
-      `metadata childSessionId ${JSON.stringify(metadata.childSessionId)} does not match payload session_id ${JSON.stringify(totals.sessionId)}`,
+      `metadata childSessionId ${JSON.stringify(metadata.childSessionId)} does not match usage session ${JSON.stringify(totals.sessionId)}`,
     );
   }
   const existingCaptures = Array.isArray(metadata.usageCaptures)

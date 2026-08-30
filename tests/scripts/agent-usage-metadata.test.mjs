@@ -10,6 +10,7 @@ import {
 } from "../../scripts/agent-usage-metadata/lib.mjs";
 
 const SESSION = "sess_subagent_agent_test";
+const AGENT_ID = "agent_test";
 
 function row(over = {}) {
   return {
@@ -31,7 +32,7 @@ function row(over = {}) {
 
 function metadataText(over = {}) {
   return JSON.stringify({
-    agentId: "agent_test",
+    agentId: AGENT_ID,
     childSessionId: SESSION,
     status: "completed",
     ...over,
@@ -41,21 +42,57 @@ function metadataText(over = {}) {
 describe("parseHookPayload", () => {
   it("accepts a Stop payload with a session id", () => {
     const raw = JSON.stringify({ hook_event_name: "Stop", session_id: SESSION });
-    expect(parseHookPayload(raw)).toEqual({ ok: true, sessionId: SESSION });
+    expect(parseHookPayload(raw)).toEqual({ ok: true, event: "Stop", sessionId: SESSION });
   });
 
-  it("rejects non-JSON, non-object, wrong event, and missing session id", () => {
+  it("accepts a TaskOutput PostToolUse payload and normalizes the agent id", () => {
+    const withPrefix = JSON.stringify({
+      hook_event_name: "PostToolUse",
+      tool_name: "TaskOutput",
+      tool_use_id: "call_1",
+      tool_input: { task_id: AGENT_ID },
+    });
+    expect(parseHookPayload(withPrefix)).toEqual({ ok: true, event: "PostToolUse", agentId: AGENT_ID });
+    const bareId = JSON.stringify({
+      hook_event_name: "PostToolUse",
+      tool_name: "TaskOutput",
+      tool_use_id: "call_1",
+      tool_input: { task_id: "test" },
+    });
+    expect(parseHookPayload(bareId)).toEqual({ ok: true, event: "PostToolUse", agentId: "agent_test" });
+  });
+
+  it("accepts an Agent PostToolUse payload as a dispatch-completion capture", () => {
+    const raw = JSON.stringify({
+      hook_event_name: "PostToolUse",
+      tool_name: "Agent",
+      tool_use_id: "call_9",
+      tool_input: { subagent_type: "implementer" },
+    });
+    expect(parseHookPayload(raw)).toEqual({ ok: true, event: "agent-dispatch", toolUseId: "call_9" });
+  });
+
+  it("rejects non-JSON, non-object, unknown events, and missing fields", () => {
     expect(parseHookPayload("not json").ok).toBe(false);
     expect(parseHookPayload("[1,2]").ok).toBe(false);
     expect(parseHookPayload(JSON.stringify({ hook_event_name: "PostToolUse", session_id: SESSION })).ok).toBe(false);
     expect(parseHookPayload(JSON.stringify({ hook_event_name: "Stop" })).ok).toBe(false);
     expect(parseHookPayload(JSON.stringify({ hook_event_name: "Stop", session_id: 7 })).ok).toBe(false);
+    expect(
+      parseHookPayload(JSON.stringify({ hook_event_name: "PostToolUse", tool_name: "TaskOutput", tool_use_id: "c", tool_input: {} })).ok,
+    ).toBe(false);
+    expect(
+      parseHookPayload(JSON.stringify({ hook_event_name: "PostToolUse", tool_name: "Bash", tool_use_id: "c", tool_input: {} })).ok,
+    ).toBe(false);
   });
 });
 
 describe("computeUsageTotals", () => {
   it("sums token columns and request counts across rows", () => {
-    const rows = [row(), row({ status: "error", input_tokens: 30, output_tokens: 0, reasoning_tokens: 0, cache_read_input_tokens: 0, completed_at: null })];
+    const rows = [
+      row(),
+      row({ status: "error", input_tokens: 30, output_tokens: 0, reasoning_tokens: 0, cache_read_input_tokens: 0, completed_at: null }),
+    ];
     const totals = computeUsageTotals(SESSION, rows, "2026-08-30T00:00:00.000Z");
     expect(totals.requestCount).toBe(2);
     expect(totals.completedRequestCount).toBe(1);
@@ -91,7 +128,7 @@ describe("mergeUsageIntoMetadata", () => {
 
   it("preserves pre-existing keys and adds usage keys", () => {
     const next = mergeUsageIntoMetadata(metadataText(), totals);
-    expect(next.agentId).toBe("agent_test");
+    expect(next.agentId).toBe(AGENT_ID);
     expect(next.status).toBe("completed");
     expect(next.usage.inputTokens).toBe(100);
     expect(next.usageCaptures).toHaveLength(1);
@@ -122,7 +159,7 @@ describe("mergeUsageIntoMetadata", () => {
     expect(() => mergeUsageIntoMetadata("{corrupt", totals)).toThrow(/not valid JSON/);
   });
 
-  it("throws when the record does not belong to the payload session", () => {
+  it("throws when the record does not belong to the usage session", () => {
     expect(() =>
       mergeUsageIntoMetadata(metadataText({ childSessionId: "sess_subagent_agent_other" }), totals),
     ).toThrow(/does not match/);

@@ -1,26 +1,35 @@
 #!/usr/bin/env bun
 // ZCode workspace hook (issue #95): append a subagent's real token usage to
-// its agent metadata.json when the subagent session stops.
+// its agent metadata.json automatically.
 //
 // Wiring (enabled in .zcode/config.json, trusted via `zcode hooks trust
-// grant`): the workspace hook runtime fires the `Stop` event in a session's
-// runtime when its agent loop stops. For a dispatched subagent the payload's
-// `session_id` is the child session; at that point the child's usage rows in
-// the local telemetry DB are final. We sum `model_usage` rows for that
-// session and merge the totals into the agent record found by scanning the
-// agents dir for `childSessionId === session_id`.
+// grant` or the desktop review flow). Capture points, in the order they fire
+// in the manager loop:
+// - PostToolUse on `Agent`: a foreground dispatch completed (tool_use_id maps
+//   to the agent record's parentToolUseId).
+// - Stop: fires when a session's agent loop stops; for a harness that fires
+//   it in a subagent child session, `session_id` IS the child session.
+// - PostToolUse on `TaskOutput`: the manager collected a background
+//   subagent's result (task_id maps to the agent record's agentId). This is
+//   the reliable capture point for background dispatches, because the child
+//   usage rows in the telemetry DB are final once its result is collected.
+//
+// For each capture we sum the child session's `model_usage` rows in the
+// local telemetry DB and merge the totals into the agent record's
+// metadata.json (found by scanning the agents dir).
 //
 // Guarantees (the invariant this script protects):
-// - Lossless: totals are recomputed from the full model_usage row set of the
-//   child session on every capture, so resumed (continued) subagents — which
-//   append rows to the same session id — accumulate correctly and repeated
-//   captures are idempotent (fingerprint-deduped history).
+// - Lossless across resumes: totals are recomputed from the FULL
+//   model_usage row set of the child session on every capture, so a resumed
+//   (continued) subagent — whose new turns append rows to the same session
+//   id — accumulates correctly, and repeated captures are idempotent
+//   (fingerprint-deduped history).
 // - Never corrupts: metadata.json is parsed and validated before any write;
 //   writes are atomic (tmp file + rename in the target dir). Any guard
 //   failure means "do not write".
 // - Observable: every skip/failure emits a structured JSON line on stderr and
 //   to the JSONL sidecar log (default ~/.zcode/cli/agent-usage-metadata.log)
-//   and exits non-zero on failure. Never exits 2 (must not block Stop).
+//   and exits non-zero on failure. Never exits 2 (must not block tools).
 //
 // Environment overrides (used by tests): ZCODE_DB_PATH, ZCODE_AGENTS_DIR,
 // ZCODE_AGENT_USAGE_LOG.
@@ -60,9 +69,10 @@ function readStdin() {
   return readFileSync(0, "utf8");
 }
 
-// Find the agent record whose childSessionId matches. The agents dir holds
-// one folder per parent session: agents/<parentSessionId>/agent_<agentId>/.
-function findAgentRecordPath(agentsDir, sessionId) {
+// Scan the agents dir (one folder per parent session:
+// agents/<parentSessionId>/agent_<agentId>/) for the record matching the
+// capture — by childSessionId (Stop) or agentId (TaskOutput).
+function findAgentRecordPath(agentsDir, match) {
   let parents;
   try {
     parents = readdirSync(agentsDir);
@@ -92,12 +102,15 @@ function findAgentRecordPath(agentsDir, sessionId) {
       } catch {
         continue; // Unrelated/unreadable record; never scanned into.
       }
-      if (parsed && parsed.childSessionId === sessionId) {
-        return { ok: true, path: metadataPath, text };
+      const matches =
+        (match.childSessionId && parsed.childSessionId === match.childSessionId) ||
+        (match.agentId && parsed.agentId === match.agentId);
+      if (matches) {
+        return { ok: true, path: metadataPath, text, childSessionId: parsed.childSessionId };
       }
     }
   }
-  return { ok: false, reason: `no agent record with childSessionId ${sessionId}` };
+  return { ok: false, reason: `no agent record matching ${JSON.stringify(match)}` };
 }
 
 function queryUsageRows(dbPath, sessionId) {
@@ -142,52 +155,39 @@ function atomicWrite(filePath, content) {
   }
 }
 
-async function main() {
-  const parsed = parseHookPayload(readStdin());
-  if (!parsed.ok) {
-    emit("skip_payload", { reason: parsed.reason });
-    return 0; // Not this hook's event — silent success, nothing written.
+// Shared tail: resolve the record's child session, read its usage, merge,
+// write. Returns the process exit code.
+function captureUsage(record, dbPath) {
+  if (!record.childSessionId) {
+    emit("error_metadata_guard", { path: record.path, reason: "agent record has no childSessionId" });
+    return 1;
   }
-  const sessionId = parsed.sessionId;
-  const dbPath = process.env.ZCODE_DB_PATH || DEFAULT_DB;
-  const agentsDir = process.env.ZCODE_AGENTS_DIR || DEFAULT_AGENTS_DIR;
-
-  const record = findAgentRecordPath(resolve(agentsDir), sessionId);
-  if (!record.ok) {
-    // Interactive sessions stop too; they have no agent record. Observable
-    // but not a failure.
-    emit("skip_no_agent_record", { sessionId, reason: record.reason });
-    return 0;
-  }
-
-  const usage = queryUsageRows(dbPath, sessionId);
+  const usage = queryUsageRows(dbPath, record.childSessionId);
   if (!usage.ok) {
-    emit("error_db", { sessionId, reason: usage.reason });
+    emit("error_db", { sessionId: record.childSessionId, reason: usage.reason });
     return 1;
   }
   if (usage.rows.length === 0) {
-    // A Stop with no usage rows yet: writing zeros would be a lie. Skip.
-    emit("skip_no_usage_rows", { sessionId });
+    // No usage rows yet: writing zeros would be a lie. Skip.
+    emit("skip_no_usage_rows", { sessionId: record.childSessionId });
     return 0;
   }
-
-  const totals = computeUsageTotals(sessionId, usage.rows, new Date().toISOString());
+  const totals = computeUsageTotals(record.childSessionId, usage.rows, new Date().toISOString());
   let nextText;
   try {
     nextText = serializeMetadata(mergeUsageIntoMetadata(record.text, totals));
   } catch (e) {
-    emit("error_metadata_guard", { sessionId, path: record.path, reason: e.message });
+    emit("error_metadata_guard", { sessionId: record.childSessionId, path: record.path, reason: e.message });
     return 1;
   }
-
   try {
     atomicWrite(record.path, nextText);
   } catch (e) {
-    emit("error_write", { sessionId, path: record.path, reason: e.message });
+    emit("error_write", { sessionId: record.childSessionId, path: record.path, reason: e.message });
     return 1;
   }
   emit("usage_recorded", {
-    sessionId,
+    sessionId: record.childSessionId,
     path: record.path,
     requestCount: totals.requestCount,
     inputTokens: totals.inputTokens,
@@ -196,6 +196,33 @@ async function main() {
     wallTimeMs: totals.wallTimeMs,
   });
   return 0;
+}
+
+async function main() {
+  const parsed = parseHookPayload(readStdin());
+  if (!parsed.ok) {
+    emit("skip_payload", { reason: parsed.reason });
+    return 0; // Not this hook's event — silent success, nothing written.
+  }
+  const dbPath = process.env.ZCODE_DB_PATH || DEFAULT_DB;
+  const agentsDir = resolve(process.env.ZCODE_AGENTS_DIR || DEFAULT_AGENTS_DIR);
+
+  let match;
+  if (parsed.event === "stop") {
+    match = { childSessionId: parsed.sessionId };
+  } else if (parsed.event === "task-output") {
+    match = { agentId: parsed.agentId };
+  } else {
+    match = { parentToolUseId: parsed.toolUseId };
+  }
+
+  const record = findAgentRecordPath(agentsDir, match);
+  if (!record.ok) {
+    // Parent/interactive sessions have no agent record: observable no-op.
+    emit("skip_no_agent_record", { match, reason: record.reason });
+    return 0;
+  }
+  return captureUsage(record, dbPath);
 }
 
 const code = await main();
