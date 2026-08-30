@@ -40,6 +40,31 @@ The hook loads the config on every event, so edits take effect immediately;
 invalid fields fall back to defaults (fail-open) with a structured warning on
 stderr.
 
+## Scope (session-id filter)
+
+The guardrail applies to the manager workflow's **subagent dispatches only**;
+interactive sessions (e.g. `/goal`) are never touched. The decision is a regex
+match on the hook payload's `session_id`, configured alongside the caps:
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `scope` | `subagents-only` | `subagents-only` guards only matching sessions; `all` guards every session (pre-#123 behavior). Any other value degrades to the default. |
+| `subagentSessionPattern` | `^sess_subagent_agent_` | Regex a `session_id` must match to be guarded under `subagents-only`. |
+
+**Observed-convention caveat.** `^sess_subagent_agent_` is an *observed
+harness convention*, not a documented contract (making the runtime's
+session-id shape a contract is a ZCode-client matter). A wrong or stale
+pattern fails **open silently**: out-of-scope sessions get no counting and no
+deny — exactly as if the hook were not installed (full no-op: no state
+read/write). The mitigation is observability, not a tighter default: when a
+non-matching session still runs verification commands, the hook emits a
+`warn_scope_zero_match` event (structured JSON on stderr) **once per
+session** (separate `<session>.scope.json` marker file in the state dir), so
+a silently-ineffective filter is detectable. Note that interactive sessions
+running verification commands also trigger this warn once — the hook cannot
+distinguish a human session from a mis-scoped subagent; a single warn line is
+the accepted cost.
+
 ## Wiring (`.zcode/config.json`)
 
 | Event | Matcher | Role |
