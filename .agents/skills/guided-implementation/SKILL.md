@@ -87,6 +87,37 @@ For each area the plan touches, verify compliance before writing code.
 - Write tests before or alongside implementation.
 - When deviating from the plan, pause and ask for approval.
 - When touching architecture, pause and ask for approval.
+- Checkpoint commit at every test-green point (see below) — never batch all commits to the end.
+
+## Phase boundaries
+
+A run is billed per request at its current context size, so the last quartile of
+requests costs multiples of the first; and a run killed by a rate limit loses
+everything not yet committed. Real evidence: a senior-implementer run in this
+repo (issue #95, session `sess_subagent_agent_da680873-b5fb-492a-af08-76a277d27c1e`,
+2026-08-30) billed 38M input tokens over 320 requests with per-request average
+growing 41k → 95k → 140k → 199k across quartiles, while its checkpoint commits
+(bffc985, 13fe0ac, c5e2bd7, f028a28, faf033d) preserved the full effort. The run
+is therefore a sequence of explicit phases — **implement → compact/handoff →
+test loop → report** — and each boundary below is mandatory, not advisory:
+
+1. **Implement phase.** One-pass reads; do not re-read files you already hold,
+   and trim command output as you go. Checkpoint commit as soon as any gate
+   passes locally (typecheck, lint, a single test file), not only the full
+   suite.
+2. **Compact/handoff boundary — before the test-iteration phase.** The
+   exploration and writing you did to produce the change is dead weight for
+   iterating on test failures. Before the first full test iteration, either
+   compact your context or hand the verification loop (run gates, read
+   failures, patch, rerun) to a fresh scoped context that carries only the
+   failing output and the code under test.
+3. **Test loop.** Iterate to green in the lean context. Commit at every
+   test-green point so a kill loses nothing but the current request.
+4. **Report/review boundary — after review, before addressing feedback.**
+   Address review findings in a fresh context (new scoped subagent, or after
+   compaction) that carries the findings and the relevant diff — not the whole
+   implementation transcript. Role profiles (`.zcode/agents/implementer.md`,
+   `.zcode/agents/senior-implementer.md`) encode the same boundaries.
 
 ## After implementation
 
