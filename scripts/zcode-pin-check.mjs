@@ -60,8 +60,18 @@ for (let i = 0; i < argv.length; i++) {
 /** Reasoning variants the harness validates `thoughtLevel:` against. */
 const THOUGHT_LEVELS = new Set(["low", "medium", "high", "xhigh", "max"]);
 
-/** Read a frontmatter `key:` value, or null when the file carries none. */
+/** Hardcoded per-field frontmatter patterns — a RegExp built from the `key`
+ * argument would trip semgrep's non-literal-regexp rule, and there are only
+ * two fields to read. */
+const FRONTMATTER_FIELDS = {
+  model: /^model:\s*(.+)\s*$/m,
+  thoughtLevel: /^thoughtLevel:\s*(.+)\s*$/m,
+};
+
+/** Read a frontmatter field value, or null when the file carries none. */
 async function readField(file, key) {
+  const pattern = FRONTMATTER_FIELDS[key];
+  if (!pattern) fail(`unsupported frontmatter key "${key}"`);
   let text;
   try {
     text = await readFile(join(ROLES_DIR, file), "utf8");
@@ -70,7 +80,7 @@ async function readField(file, key) {
   }
   const fm = text.match(/^---\r?\n([\s\S]*?)\r?\n---/);
   if (!fm) return null;
-  return fm[1].match(new RegExp(`^${key}:\\s*(.+)\\s*$`, "m"))?.[1] ?? null;
+  return fm[1].match(pattern)?.[1] ?? null;
 }
 
 let config;
