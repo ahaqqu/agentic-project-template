@@ -110,9 +110,11 @@ describe("hook.mjs scope gate (process boundary)", () => {
   });
 
   const stateFileFor = (env, sessionId) => join(env.stateDir, `${sessionId}.json`);
-  const warnMarkerFor = (env, sessionId) => join(env.stateDir, `${sessionId}.scope.json`);
+  // Review A3: markers live in the disjoint `scope/` subdirectory.
+  const warnMarkerFor = (env, sessionId) => join(env.stateDir, "scope", `warn-${sessionId}.json`);
+  const scopeCacheFor = (env) => join(env.stateDir, "scope", "last-good.json");
 
-  function runHook(payload, env) {
+  function runHook(payload, env, extraEnv = {}) {
     return spawnSync("bun", [HOOK], {
       input: JSON.stringify(payload),
       encoding: "utf8",
@@ -123,6 +125,7 @@ describe("hook.mjs scope gate (process boundary)", () => {
         ZCODE_PROJECT_DIR: "",
         ZCODE_GUARDRAIL_STATE_DIR: env.stateDir,
         ZCODE_GUARDRAIL_CONFIG: env.configPath,
+        ...extraEnv,
       },
     });
   }
@@ -216,5 +219,50 @@ describe("hook.mjs scope gate (process boundary)", () => {
     const denied = runHook(preToolUse(HUMAN, CMD), env);
     expect(JSON.parse(denied.stdout).hookSpecificOutput.permissionDecision).toBe("deny");
     expect(warnCount(denied.stderr)).toBe(0); // nothing is non-matching under "all"
+  });
+
+  // --- Review-round findings (PR #124) --------------------------------------
+
+  it("TRAP: config loss preserves the last-known scope intent (an 'all' deployment keeps counting)", () => {
+    const env = newEnv("all");
+    // Two good loads under scope "all" record HUMAN's failures and seed the cache.
+    for (let i = 0; i < 2; i++) runHook(postBash(HUMAN, CMD, FAIL_OUT), env);
+    expect(existsSync(scopeCacheFor(env)), "scope intent cached from the good config").toBe(true);
+    // The config file is then destroyed (unparseable garbage).
+    writeFileSync(env.configPath, "NOT JSON{{{");
+    // Counting must continue under the cached intent: the next failure is
+    // recorded (3 total), so the rerun denies — no silent subagents-only flip.
+    const seeded = runHook(postBash(HUMAN, CMD, FAIL_OUT), env);
+    expect(seeded.stderr).toContain("verification_result");
+    expect(seeded.stderr).toContain("warn_scope_degraded");
+    const denied = runHook(preToolUse(HUMAN, CMD), env);
+    expect(JSON.parse(denied.stdout).hookSpecificOutput.permissionDecision).toBe("deny");
+    expect(existsSync(stateFileFor(env, HUMAN))).toBe(true);
+  });
+
+  it("TRAP: a degraded scope field falls back to the cached intent, not the default", () => {
+    const env = newEnv("all");
+    runHook(postBash(HUMAN, CMD, FAIL_OUT), env); // seeds the cache with scope "all"
+    // Corrupt ONLY the scope field (valid JSON, invalid value).
+    const cfg = JSON.parse(readFileSync(env.configPath, "utf8"));
+    cfg.scope = "everything";
+    writeFileSync(env.configPath, JSON.stringify(cfg));
+    const seeded = runHook(postBash(HUMAN, CMD, FAIL_OUT), env);
+    expect(seeded.stderr).toContain("verification_result"); // still counting under "all"
+    expect(seeded.stderr).toContain("warn_scope_degraded");
+  });
+
+  it("warn_config is scoped to verification-relevant events (Edit/Write stay silent)", () => {
+    const env = newEnv();
+    const missing = join(env.dir, "does-not-exist.json");
+    const overrides = { ZCODE_GUARDRAIL_CONFIG: missing };
+    // An Edit event under a missing config must be as silent as at base.
+    const edit = runHook(postEdit(HUMAN), env, overrides);
+    expect(edit.status).toBe(0);
+    expect(edit.stderr).not.toContain("warn_config");
+    expect(edit.stderr).not.toContain("warn_scope_degraded");
+    // The Bash verification event still warns (it reaches the counting path).
+    const bash = runHook(postBash(HUMAN, CMD, FAIL_OUT), env, overrides);
+    expect(bash.stderr).toContain("warn_config");
   });
 });

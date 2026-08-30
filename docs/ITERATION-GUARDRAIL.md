@@ -59,11 +59,25 @@ deny — exactly as if the hook were not installed (full no-op: no state
 read/write). The mitigation is observability, not a tighter default: when a
 non-matching session still runs verification commands, the hook emits a
 `warn_scope_zero_match` event (structured JSON on stderr) **once per
-session** (separate `<session>.scope.json` marker file in the state dir), so
-a silently-ineffective filter is detectable. Note that interactive sessions
+session** (marker file `scope/warn-<session>.json` in a `scope/`
+subdirectory of the state dir, disjoint from counting state), so a
+silently-ineffective filter is detectable. Note that interactive sessions
 running verification commands also trigger this warn once — the hook cannot
 distinguish a human session from a mis-scoped subagent; a single warn line is
 the accepted cost.
+
+**Config-loss direction.** If the config file becomes unreadable, or its
+`scope`/`subagentSessionPattern` fields degrade, the hook does **not**
+silently fall back to the `subagents-only` default: the last config that
+loaded with valid scope fields is cached at `scope/last-good.json` in the
+state dir and the cached scope intent is reused, with a
+`warn_scope_degraded` event on stderr. Only when no cache exists (first run,
+never-loaded config) does the residual fail-open direction apply — counting
+suspends for non-matching sessions until the config is repaired. Caps always
+degrade to their built-in defaults on config loss; only scope intent is
+preserved. (Degradation warnings fire only on verification-relevant events —
+Bash payloads carrying a command — so `Edit`/`Write` events stay silent, as
+before the scope gate existed.)
 
 ## Wiring (`.zcode/config.json`)
 

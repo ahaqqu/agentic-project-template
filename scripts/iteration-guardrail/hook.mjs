@@ -25,7 +25,7 @@
 // Environment overrides (used by tests): ZCODE_GUARDRAIL_CONFIG (config path),
 // ZCODE_GUARDRAIL_STATE_DIR (state dir), ZCODE_SESSION_ID, ZCODE_PROJECT_DIR.
 
-import { mkdirSync, readFileSync, writeFileSync, renameSync, unlinkSync, openSync, closeSync, fsyncSync, existsSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync, renameSync, unlinkSync, openSync, closeSync, fsyncSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
@@ -41,12 +41,17 @@ import {
   defaultConfig,
   emptyState,
   evaluateDeny,
-  isSubagentSession,
   isVerificationCommand,
   isValidState,
   normalizeConfig,
   outcomeFromToolResponse,
 } from "./lib.mjs";
+import {
+  loadScopeFields,
+  saveScopeFields,
+  scopeGateNoop,
+  stateFileName,
+} from "./scope-observability.mjs";
 
 const STATE_SCHEMA_VERSION = 1;
 
@@ -77,11 +82,6 @@ function resolveStateDir(payload) {
   const projectDir = process.env.ZCODE_PROJECT_DIR || payload.cwd || process.cwd();
   const key = createHash("sha256").update(projectDir).digest("hex").slice(0, 16);
   return join(tmpdir(), "zcode-iteration-guardrail", key);
-}
-
-function stateFileName(sessionId) {
-  const safe = sessionId.replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 128);
-  return `${safe}.json`;
 }
 
 function loadState(statePath) {
@@ -135,17 +135,48 @@ function saveState(statePath, state) {
   }
 }
 
-function loadConfig() {
+// `notify` scopes the stderr warnings to verification-relevant events
+// (review A2): base semantics only loaded config for Bash events carrying a
+// command, so Edit/Write events stay silent even when the config is
+// degraded. `statePath` enables the scope-intent cache (review A1).
+function loadConfig(notify = true, statePath = null) {
   const path = process.env.ZCODE_GUARDRAIL_CONFIG || join(dirname(fileURLToPath(import.meta.url)), "config.json");
   let raw;
   try {
     raw = JSON.parse(readFileSync(path, "utf8"));
   } catch (e) {
-    emit("warn_config", { path, reason: e.message, fallback: "built-in defaults" });
+    // Scope-intent persistence (review A1): config loss must not silently
+    // flip an operator's `scope: "all"` to the subagents-only default (that
+    // would stop counting for every session, invisibly). The last
+    // known-good scope fields are reused; only with no cache at all does the
+    // fail-open default apply (the documented residual direction).
+    const cached = statePath ? loadScopeFields(statePath) : null;
+    if (cached) {
+      const rescued = normalizeConfig(cached);
+      if (notify) emit("warn_scope_degraded", { path, reason: e.message, fallback: "last-known-good scope intent" });
+      return { config: rescued.config, degraded: ["unreadable config file (scope intent preserved)"] };
+    }
+    if (notify) emit("warn_config", { path, reason: e.message, fallback: "built-in defaults" });
     return { config: defaultConfig(), degraded: ["unreadable config file"] };
   }
   const normalized = normalizeConfig(raw);
-  if (normalized.degraded.length > 0) {
+  const scopeDegraded =
+    normalized.degraded.includes("scope") || normalized.degraded.includes("subagentSessionPattern");
+  if (statePath) {
+    if (scopeDegraded) {
+      const cached = loadScopeFields(statePath);
+      if (cached) {
+        const rescued = normalizeConfig({ ...raw, ...cached });
+        if (notify) {
+          emit("warn_scope_degraded", { path, degraded: normalized.degraded, fallback: "last-known-good scope intent" });
+        }
+        return { config: rescued.config, degraded: rescued.degraded };
+      }
+    } else {
+      saveScopeFields(statePath, raw);
+    }
+  }
+  if (normalized.degraded.length > 0 && notify) {
     emit("warn_config", { path, degraded: normalized.degraded, fallback: "defaults for degraded fields" });
   }
   return normalized;
@@ -159,57 +190,21 @@ function commandFrom(payload) {
   return null;
 }
 
-// Shared plumbing for the three Bash branches (review B2): resolve the
-// command and the session state once, against the caller's already-loaded
-// config. Returns null when the event is not a classified verification call
-// on Bash.
-function resolveVerificationContext(payload, statePath, config) {
-  const command = commandFrom(payload);
+// Shared plumbing for the three Bash branches (review B2): consume the
+// already-classified command and load the session state once. Returns null
+// when the event is not a classified verification call on Bash.
+function resolveVerificationContext(command, statePath, config) {
   if (command === null) return null;
-  if (!isVerificationCommand(command, config)) return null;
   return { command, config, state: loadState(statePath) ?? emptyState() };
 }
 
-// --- Session-scope gate (issue #123) ---------------------------------------
-// With the default `subagents-only` scope only manager subagent dispatches
-// (session_id matching the configured pattern) are guarded; every other
-// session is a FULL no-op — no counting-state read/write, no deny — exactly
-// as if the hook were not installed. A wrong pattern fails open silently, so
-// the one deliberate trace a non-matching session may leave is a rate-limited
-// warn (once per session, separate marker file) when it still runs
-// verification commands: that is the signature of a silently-ineffective
-// filter and must be observable without spamming.
-
-function isVerificationActivity(payload, config) {
-  if (payload.tool_name !== "Bash") return false;
+// Single source of truth (review B2) for "this Bash payload carries a
+// classified verification command", shared by the scope gate (activity
+// signal) and the counting path so the two can never drift.
+function classifyVerification(payload, config) {
+  if (payload.tool_name !== "Bash") return null;
   const command = commandFrom(payload);
-  return command !== null && isVerificationCommand(command, config);
-}
-
-function warnZeroMatchOnce(payload, sessionId, statePath, config) {
-  const markerPath = join(dirname(statePath), stateFileName(`${sessionId}.scope`));
-  try {
-    if (existsSync(markerPath)) return; // already warned this session
-    writeFileSync(markerPath, JSON.stringify({ schemaVersion: 1, warnedAt: new Date().toISOString() }));
-    emit("warn_scope_zero_match", {
-      sessionId,
-      scope: config.scope,
-      hint: "session ran verification commands but matched nothing all session; check scope/subagentSessionPattern in scripts/iteration-guardrail/config.json",
-    });
-  } catch (e) {
-    // Observability is best-effort: a failed warn must never block the call.
-    emit("error_state_write", { path: markerPath, reason: e.message });
-  }
-}
-
-// Returns true when the hook must no-op for this session (non-matching under
-// the configured scope); matching sessions fall through to the counting path.
-function scopeGateNoop(payload, config, sessionId, statePath) {
-  if (isSubagentSession(config, sessionId)) return false;
-  if (isVerificationActivity(payload, config)) {
-    warnZeroMatchOnce(payload, sessionId, statePath, config);
-  }
-  return true;
+  return command !== null && isVerificationCommand(command, config) ? command : null;
 }
 
 async function main() {
@@ -225,12 +220,18 @@ async function main() {
     return 0;
   }
   const statePath = join(resolveStateDir(payload), stateFileName(sessionId));
-  const { config } = loadConfig();
-  if (scopeGateNoop(payload, config, sessionId, statePath)) return 0;
+  // Notify decision needs no config (review A2): exactly the events that
+  // reached config loading at base — Bash payloads carrying a command.
+  const notify = payload.tool_name === "Bash" && commandFrom(payload) !== null;
+  const { config } = loadConfig(notify, statePath);
+  // Classification runs once per event (review B2), shared by the gate and
+  // the counting branches; the gate no-ops non-matching sessions (issue #123).
+  const command = classifyVerification(payload, config);
+  if (scopeGateNoop(emit, { config, sessionId, statePath, verificationCommand: command })) return 0;
 
   if (payload.hook_event_name === "PreToolUse") {
     if (payload.tool_name !== "Bash") return 0;
-    const ctx = resolveVerificationContext(payload, statePath, config);
+    const ctx = resolveVerificationContext(command, statePath, config);
     if (!ctx) {
       // Either not a Bash-with-command payload or not a classified
       // verification command — both pass through untouched.
@@ -252,7 +253,7 @@ async function main() {
       return 0;
     }
     if (payload.tool_name !== "Bash") return 0;
-    const ctx = resolveVerificationContext(payload, statePath, config);
+    const ctx = resolveVerificationContext(command, statePath, config);
     if (!ctx) return 0;
     const outcome = outcomeFromToolResponse(payload.tool_response);
     const outputText =
@@ -273,7 +274,7 @@ async function main() {
     emit("skip_interrupted", { sessionId });
     return 0;
   }
-  const ctx = resolveVerificationContext(payload, statePath, config);
+  const ctx = resolveVerificationContext(command, statePath, config);
   if (!ctx) return 0;
   emit("verification_failure_event", { sessionId, command: ctx.command.slice(0, 200) });
   saveState(
