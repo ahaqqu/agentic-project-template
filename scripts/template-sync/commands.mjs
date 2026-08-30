@@ -9,6 +9,7 @@ import {
   resolveRef,
 } from "./git.mjs";
 import { isManifestPath, isOverwritePath } from "./manifest.mjs";
+import { checkZcodeMachinery } from "../zcode-machinery-check.mjs";
 import { clearPending, readPending, writeState } from "./state.mjs";
 import { baseline, commitState, drift, stageState, validateFlag } from "./sync.mjs";
 
@@ -103,9 +104,32 @@ export function createCommands(ctx) {
     return 0;
   };
 
+  // Machinery gate (issue #125): the .zcode/ hook wiring and role pins are
+  // template-owned, so every run — template repo or fork — must carry them
+  // intact. Hard failures (wiring shape, concrete pins, thoughtLevel) gate
+  // here, where CI can run; the environment-dependent layer (whether a pin
+  // resolves in the local ZCode provider config) is only visible as drift
+  // warnings, from `bun run zcode:preflight`.
+  const machineryResult = () => {
+    const { errors, roles } = checkZcodeMachinery(cwd);
+    if (errors.length) {
+      log.error("zcode machinery gate failed", {
+        violations: errors,
+        hint: "the .zcode/ machinery is template-owned: restore with 'bun run template-sync update'; a fork re-pins a model via ~/.zcode/agents/<role>.md (user-scope override)",
+      });
+      return false;
+    }
+    log.info("zcode machinery gate passed", {
+      roles: roles.length,
+      wiring: ".zcode/config.json hook events present and enabled",
+    });
+    return true;
+  };
+
   const cmdCheck = () => {
+    if (!machineryResult()) return 1;
     if (isTemplateRepo({ gitOut, remote, manifest, env })) {
-      log.info("template repo detected; gate skipped");
+      log.info("template repo detected; drift gate skipped");
       return 0;
     }
     ensureRemote({ git, gitOk, gitOut, remote, log, manifest, env });

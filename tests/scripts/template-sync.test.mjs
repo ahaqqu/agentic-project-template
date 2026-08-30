@@ -1,8 +1,9 @@
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, writeFileSync, rmSync, readFileSync, existsSync } from "node:fs";
+import { mkdtempSync, writeFileSync, rmSync, readFileSync, existsSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync, execSync } from "node:child_process";
+import { checkZcodeMachinery } from "../../scripts/zcode-machinery-check.mjs";
 
 const ROOT = process.cwd();
 const CLI = `${ROOT}/scripts/template-sync/cli.mjs`;
@@ -50,6 +51,40 @@ function makeFork(upstream) {
   return dir;
 }
 
+// Minimal template-shaped .zcode/ machinery (issue #125): the gate command
+// (`check`) hard-fails without it, the way a fork that has not yet synced the
+// now-template-owned .zcode/ would fail.
+function writeZcodeMachinery(dir) {
+  mkdirSync(join(dir, ".zcode", "agents"), { recursive: true });
+  writeFileSync(
+    join(dir, ".zcode", "config.json"),
+    JSON.stringify({
+      hooks: {
+        enabled: true,
+        events: {
+          PreToolUse: [
+            { matcher: "Bash", hooks: [{ type: "process", command: "bun", args: ["scripts/iteration-guardrail/hook.mjs"], enabled: true }] },
+          ],
+          PostToolUse: [
+            { matcher: "Bash", hooks: [{ type: "process", command: "bun", args: ["scripts/iteration-guardrail/hook.mjs"], enabled: true }] },
+            { matcher: "Edit|Write", hooks: [{ type: "process", command: "bun", args: ["scripts/iteration-guardrail/hook.mjs"], enabled: true }] },
+            { matcher: "Agent", hooks: [{ type: "process", command: "bun", args: ["scripts/agent-usage-metadata/hook.mjs"], enabled: true }] },
+            { matcher: "TaskOutput", hooks: [{ type: "process", command: "bun", args: ["scripts/agent-usage-metadata/hook.mjs"], enabled: true }] },
+          ],
+          PostToolUseFailure: [
+            { matcher: "Bash", hooks: [{ type: "process", command: "bun", args: ["scripts/iteration-guardrail/hook.mjs"], enabled: true }] },
+          ],
+        },
+      },
+    }),
+  );
+  writeFileSync(
+    join(dir, ".zcode", "agents", "implementer.md"),
+    "---\nname: implementer\ntools: ['*']\nmodel: builtin:zai-start-plan/GLM-5.3-Flash\nthoughtLevel: high\n---\n\nBody.\n",
+  );
+  expect(checkZcodeMachinery(dir).errors).toEqual([]);
+}
+
 describe("template-sync CLI", () => {
   let upstream;
   let fork;
@@ -74,6 +109,7 @@ describe("template-sync CLI", () => {
       merge: ["README.md"],
     }));
     writeFileSync(`${fork}/project.txt`, "project file\n");
+    writeZcodeMachinery(fork);
     commit(fork, "add manifest");
   });
 
@@ -91,6 +127,21 @@ describe("template-sync CLI", () => {
   it("check passes after first sync", () => {
     run(fork, "init", { TEMPLATE_SYNC_UPSTREAM: `${upstream}` });
     run(fork, "update --ref=v1.0.0", { TEMPLATE_SYNC_UPSTREAM: `${upstream}` });
+    const out = run(fork, "check", { TEMPLATE_SYNC_UPSTREAM: `${upstream}` });
+    expect(out).toContain("gate passed");
+  });
+
+  it("check fails when the .zcode/ machinery is missing (issue #125)", () => {
+    // The hook wiring and role pins are template-owned: a fork that has not
+    // inherited them fails the gate with the restore hint, not silently.
+    run(fork, "init", { TEMPLATE_SYNC_UPSTREAM: `${upstream}` });
+    run(fork, "update --ref=v1.0.0", { TEMPLATE_SYNC_UPSTREAM: `${upstream}` });
+    rmSync(`${fork}/.zcode`, { recursive: true, force: true });
+    expect(() =>
+      run(fork, "check", { TEMPLATE_SYNC_UPSTREAM: `${upstream}` }),
+    ).toThrow(/machinery gate failed/);
+    // Restoring the machinery (what `template-sync update` would do) is green.
+    writeZcodeMachinery(fork);
     const out = run(fork, "check", { TEMPLATE_SYNC_UPSTREAM: `${upstream}` });
     expect(out).toContain("gate passed");
   });
@@ -280,6 +331,7 @@ describe("template-sync CLI", () => {
       overwrite: ["AGENTS.md"],
       merge: ["README.md"],
     }));
+    writeZcodeMachinery(dir);
     commit(dir, "tree-copy bootstrap");
 
     run(dir, "init", { TEMPLATE_SYNC_UPSTREAM: `${upstream}` });
