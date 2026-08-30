@@ -7,12 +7,13 @@
 // in the manager loop:
 // - PostToolUse on `Agent`: a foreground dispatch completed (tool_use_id maps
 //   to the agent record's parentToolUseId).
-// - Stop: fires when a session's agent loop stops; for a harness that fires
-//   it in a subagent child session, `session_id` IS the child session.
 // - PostToolUse on `TaskOutput`: the manager collected a background
 //   subagent's result (task_id maps to the agent record's agentId). This is
 //   the reliable capture point for background dispatches, because the child
 //   usage rows in the telemetry DB are final once its result is collected.
+// There is deliberately no `Stop` capture: the runtime fires Stop only for
+// interactive/parent sessions (verified live), where there is nothing to
+// record and every event would trigger a full agents-dir scan.
 //
 // For each capture we sum the child session's `model_usage` rows in the
 // local telemetry DB and merge the totals into the agent record's
@@ -34,9 +35,9 @@
 // Environment overrides (used by tests): ZCODE_DB_PATH, ZCODE_AGENTS_DIR,
 // ZCODE_AGENT_USAGE_LOG.
 
-import { appendFileSync, closeSync, openSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync, unlinkSync } from "node:fs";
+import { appendFileSync, closeSync, fsyncSync, openSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync, unlinkSync } from "node:fs";
 import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import {
   USAGE_ROWS_SQL,
@@ -50,6 +51,8 @@ const DEFAULT_DB = join(homedir(), ".zcode", "cli", "db", "db.sqlite");
 const DEFAULT_AGENTS_DIR = join(homedir(), ".zcode", "cli", "agents");
 const DEFAULT_LOG = join(homedir(), ".zcode", "cli", "agent-usage-metadata.log");
 
+const LOG_MAX_BYTES = 5 * 1024 * 1024;
+
 function emit(event, fields) {
   const line = JSON.stringify({
     time: new Date().toISOString(),
@@ -59,7 +62,14 @@ function emit(event, fields) {
   });
   process.stderr.write(`${line}\n`);
   try {
-    appendFileSync(process.env.ZCODE_AGENT_USAGE_LOG || DEFAULT_LOG, `${line}\n`);
+    const logPath = process.env.ZCODE_AGENT_USAGE_LOG || DEFAULT_LOG;
+    try {
+      const { size } = statSync(logPath);
+      if (size > LOG_MAX_BYTES) renameSync(logPath, `${logPath}.1`);
+    } catch {
+      // Missing log file is fine; appendFileSync creates it.
+    }
+    appendFileSync(logPath, `${line}\n`);
   } catch {
     // Sidecar logging is best-effort; stderr already carries the record.
   }
@@ -71,7 +81,7 @@ function readStdin() {
 
 // Scan the agents dir (one folder per parent session:
 // agents/<parentSessionId>/agent_<agentId>/) for the record matching the
-// capture — by childSessionId (Stop) or agentId (TaskOutput).
+// capture — by agentId (TaskOutput) or parentToolUseId (Agent dispatch).
 function findAgentRecordPath(agentsDir, match) {
   let parents;
   try {
@@ -103,8 +113,8 @@ function findAgentRecordPath(agentsDir, match) {
         continue; // Unrelated/unreadable record; never scanned into.
       }
       const matches =
-        (match.childSessionId && parsed.childSessionId === match.childSessionId) ||
-        (match.agentId && parsed.agentId === match.agentId);
+        (match.agentId && parsed.agentId === match.agentId) ||
+        (match.parentToolUseId && parsed.parentToolUseId === match.parentToolUseId);
       if (matches) {
         return { ok: true, path: metadataPath, text, childSessionId: parsed.childSessionId };
       }
@@ -134,17 +144,25 @@ function queryUsageRows(dbPath, sessionId) {
   }
 }
 
-// Atomic replace: write the sibling temp file, fsync, rename over the target.
+// Atomic replace: write the sibling temp file, fsync the file, rename over
+// the target, then fsync the directory so the rename itself is durable.
 function atomicWrite(filePath, content) {
   const tmp = `${filePath}.tmp-${process.pid}-${Date.now()}`;
   try {
     const fd = openSync(tmp, "w");
     try {
       writeFileSync(fd, content);
+      fsyncSync(fd);
     } finally {
       closeSync(fd);
     }
     renameSync(tmp, filePath);
+    const dir = openSync(dirname(filePath), "r");
+    try {
+      fsyncSync(dir);
+    } finally {
+      closeSync(dir);
+    }
   } catch (e) {
     try {
       unlinkSync(tmp);
@@ -175,7 +193,11 @@ function captureUsage(record, dbPath) {
   const totals = computeUsageTotals(record.childSessionId, usage.rows, new Date().toISOString());
   let nextText;
   try {
-    nextText = serializeMetadata(mergeUsageIntoMetadata(record.text, totals));
+    // Re-read immediately before merging: the runtime can rewrite
+    // metadata.json on lifecycle transitions, so merge against the freshest
+    // bytes to keep the read-modify-write window as small as possible.
+    const freshText = readFileSync(record.path, "utf8");
+    nextText = serializeMetadata(mergeUsageIntoMetadata(freshText, totals));
   } catch (e) {
     emit("error_metadata_guard", { sessionId: record.childSessionId, path: record.path, reason: e.message });
     return 1;
@@ -208,18 +230,26 @@ async function main() {
   const agentsDir = resolve(process.env.ZCODE_AGENTS_DIR || DEFAULT_AGENTS_DIR);
 
   let match;
-  if (parsed.event === "stop") {
-    match = { childSessionId: parsed.sessionId };
-  } else if (parsed.event === "task-output") {
+  let capture;
+  if (parsed.event === "task-output") {
+    capture = "task-output";
     match = { agentId: parsed.agentId };
-  } else {
+  } else if (parsed.event === "agent-dispatch") {
+    capture = "agent-dispatch";
     match = { parentToolUseId: parsed.toolUseId };
+  } else {
+    // parseHookPayload only yields the two events above; this is a
+    // defensive guard, not a dispatch path — nothing is scanned.
+    emit("skip_payload", { reason: `unsupported event after parse: ${String(parsed.event)}` });
+    return 0;
   }
 
   const record = findAgentRecordPath(agentsDir, match);
   if (!record.ok) {
-    // Parent/interactive sessions have no agent record: observable no-op.
-    emit("skip_no_agent_record", { match, reason: record.reason });
+    // No agent record for this capture (e.g. the parent/interactive session,
+    // or a foreground dispatch that produced no record): observable no-op,
+    // tagged with the capture point so misses are distinguishable in logs.
+    emit("skip_no_agent_record", { capture, match, reason: record.reason });
     return 0;
   }
   return captureUsage(record, dbPath);

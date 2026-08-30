@@ -10,28 +10,33 @@ with nothing surfacing it).
 
 ## Pieces
 
-| Path | Role |
-| --- | --- |
-| `.zcode/config.json` | Workspace hook config: enables configuration-file hooks and wires three capture points (see below). |
-| `scripts/agent-usage-metadata/hook.mjs` | Hook entrypoint the runtime spawns with the payload JSON on stdin. |
-| `scripts/agent-usage-metadata/lib.mjs` | Pure logic: payload contract, `model_usage` row summation, guarded metadata merge. |
-| `tests/scripts/agent-usage-metadata.test.mjs` | Unit + subprocess tests for every acceptance criterion. |
+| Path | Role | template-sync ownership |
+| --- | --- | --- |
+| `scripts/agent-usage-metadata/hook.mjs` | Hook entrypoint the runtime spawns with the payload JSON on stdin. | `overwrite` — forks inherit updates |
+| `scripts/agent-usage-metadata/lib.mjs` | Pure logic: payload contract, `model_usage` row summation, guarded metadata merge. | `overwrite` — forks inherit updates |
+| `.zcode/config.json` | Workspace hook config: enables configuration-file hooks and wires the capture points (see below). | unlisted — project-owned, replicate (below) |
+| `tests/scripts/agent-usage-metadata.test.mjs` | Unit + subprocess tests for every acceptance criterion. | unlisted — project-owned, replicate (below) |
+| `docs/AGENT-USAGE-METADATA.md` | This document. | unlisted — project-owned, replicate (below) |
 
 ## Capture points
 
 The runtime fires workspace hooks per session; a subagent's usage rows in the
 telemetry DB are final at different moments depending on how it ran, so the
-hook recognizes three events (all no-ops for unrelated tools/sessions):
+hook recognizes two events (all no-ops for unrelated tools/sessions):
 
 1. **PostToolUse on `Agent`** — a foreground dispatch completed.
    `tool_use_id` maps to the agent record's `parentToolUseId`.
-2. **Stop** — for harnesses that fire it when a subagent child session stops,
-   `session_id` IS the child session. (The ZCode runtime only fires `Stop`
-   for interactive/parent sessions, where the hook is an observable no-op —
-   verified live; keep as a compatibility capture point.)
-3. **PostToolUse on `TaskOutput`** — the manager collected a background
+2. **PostToolUse on `TaskOutput`** — the manager collected a background
    subagent's result; `tool_input.task_id` maps to the agent record's
    `agentId`. This is the reliable capture point for background dispatches.
+
+There is deliberately **no `Stop` capture point**: the ZCode runtime fires
+`Stop` only for interactive/parent sessions, never for subagent child
+sessions (verified live — a Stop-capture prototype recorded nothing). Keeping
+it would only add a full agents-dir scan on every session stop. Any
+`Stop`/other payload is rejected by the payload contract as an observable
+no-op (`skip_payload`), so future harnesses that do fire useful `Stop` events
+surface immediately in the log instead of silently doing nothing.
 
 For each capture the hook sums the child session's `model_usage` rows from
 `~/.zcode/cli/db/db.sqlite` (read-only) and merges totals into
@@ -64,7 +69,11 @@ Workspace hooks are per-workspace and trust-gated by the harness (project
 hook files execute code). After syncing this template:
 
 1. Ensure `.zcode/config.json` (committed) is present in the workspace root.
-2. Grant trust once per workspace — either approve the harness's trust review
+2. Copy the unlisted paths the fork's sync does not carry (see the ownership
+   column above): `.zcode/config.json` (minus any fork-local additions),
+   `tests/scripts/agent-usage-metadata.test.mjs`, and this document —
+   `scripts/agent-usage-metadata/` arrives via `scripts/` sync.
+3. Grant trust once per workspace — either approve the harness's trust review
    in the desktop app, or pretrust the declarations from the CLI:
 
    ```
@@ -72,7 +81,7 @@ hook files execute code). After syncing this template:
    zcode hooks trust grant --workspace <workspace-path> --hook-digest <sha256> [...]
    ```
 
-3. Dispatch a subagent as usual; the agent record's `metadata.json` gains a
+4. Dispatch a subagent as usual; the agent record's `metadata.json` gains a
    `usage` block on collection. Check `hooks trust status` shows
    `workspace_hooks_trusted_persistent` if captures do not appear, and the
    sidecar log for the reason of any skip.

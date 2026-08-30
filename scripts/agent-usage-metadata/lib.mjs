@@ -1,15 +1,17 @@
 // Pure logic for the agent-usage-metadata hook (issue #95).
 //
 // Contract (external boundaries this module guards):
-// 1. Hook stdin payload (ZCode workspace-hook runtime). Three capture points
+// 1. Hook stdin payload (ZCode workspace-hook runtime). Two capture points
 //    are recognized — everything else is a validated no-op:
-//    a. `Stop` in a subagent child session: `session_id` IS the child session
-//       (`sess_subagent_agent_<agentId>`) and its usage rows are final.
-//    b. `PostToolUse` on the `TaskOutput` tool: the manager collected a
+//    a. `PostToolUse` on the `TaskOutput` tool: the manager collected a
 //       background subagent's result; `tool_input.task_id` identifies the
 //       agent record.
-//    c. `PostToolUse` on the `Agent` tool: a foreground dispatch completed;
+//    b. `PostToolUse` on the `Agent` tool: a foreground dispatch completed;
 //       `tool_use_id` matches the agent record's `parentToolUseId`.
+//    (`Stop` is deliberately NOT a capture point: the runtime only fires it
+//    for interactive/parent sessions, never for subagent child sessions —
+//    verified live — so a Stop capture is dead code that only adds a
+//    per-session-stop scan of the agents dir.)
 // 2. Telemetry rows: objects shaped like rows of the `model_usage` table in
 //    ~/.zcode/cli/db/db.sqlite (snake_case token columns + status/timestamps).
 // 3. Agent metadata.json: a JSON object; usage keys are ADDED/REPLACED, every
@@ -28,7 +30,6 @@ function nonEmptyString(v) {
 }
 
 // Parse + validate the hook payload. Returns one of:
-//   {ok:true, event:"stop", sessionId}
 //   {ok:true, event:"task-output", agentId}
 //   {ok:true, event:"agent-dispatch", toolUseId}
 //   {ok:false, reason} — never throws.
@@ -43,11 +44,6 @@ export function parseHookPayload(raw) {
     return { ok: false, reason: "payload is not a JSON object" };
   }
   const event = payload.hook_event_name;
-  if (event === "Stop") {
-    const sessionId = nonEmptyString(payload.session_id);
-    if (!sessionId) return { ok: false, reason: "Stop payload has no session_id" };
-    return { ok: true, event, sessionId };
-  }
   if (event === "PostToolUse") {
     const toolName = payload.tool_name;
     const toolUseId = nonEmptyString(payload.tool_use_id);
@@ -150,7 +146,11 @@ export function captureFingerprint(totals) {
     totals.completedRequestCount,
     totals.inputTokens,
     totals.outputTokens,
+    totals.reasoningTokens,
+    totals.cacheCreationInputTokens,
+    totals.cacheReadInputTokens,
     totals.computedTotalTokens,
+    totals.wallTimeMs,
   ].join(":");
 }
 
