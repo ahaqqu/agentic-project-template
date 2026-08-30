@@ -62,11 +62,15 @@ the pin prevents: senior-implementer resolved to `max` for all 280 requests
 (issues #94/#96).
 
 The pin is machine-checked: `bun run zcode:preflight` fails when any role file
-in this directory omits `thoughtLevel:` or pins a value outside the validated
-set, so the "all dispatched roles pin `thoughtLevel: high`" claim above is
-blocking, not prose. (The gate checks the config the client loads, not the
-running client — after a real dispatch, recorded evidence of the resolved
-variant is the telemetry DB's variant column, per issue #96.)
+in this directory omits `thoughtLevel:`, pins a value outside the validated
+set, or — for the six dispatched roles above — pins anything other than
+`high`, so the "all dispatched roles pin `thoughtLevel: high`" claim above is
+blocking, not prose. Forks inherit this gate (it lives in template-owned
+`scripts/`) but own this directory: a fork-added role file must carry a
+`thoughtLevel:` pin (any validated value; the dispatched role names must pin
+`high`) or the preflight fails. (The gate checks the config the client loads,
+not the running client — after a real dispatch, recorded evidence of the
+resolved variant is the telemetry DB's variant column, per issue #96.)
 
 An invalid or unreachable `model:` falls back to the session default; it does
 not hard-fail. Check agent discoverability in ZCode via
