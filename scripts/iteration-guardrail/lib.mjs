@@ -60,6 +60,10 @@ function compilePatterns(patterns) {
   for (const p of patterns) {
     if (typeof p !== "string" || p.length === 0) continue;
     try {
+      // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp —
+      // patterns come from the repo-owned hook config file, the same trust
+      // boundary as the hook command itself in .zcode/config.json (which is
+      // arbitrary code); inputs are short command lines, not user payloads.
       compiled.push(new RegExp(p, "i"));
     } catch {
       // Invalid pattern: skip it (fail-open), caller logs.
