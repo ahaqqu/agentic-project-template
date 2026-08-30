@@ -6,10 +6,10 @@
 //
 // Sections A–G below map 1:1 to the brief's named test cases.
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { test as fcTest, fc } from "@fast-check/vitest";
 import { spawnSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -29,7 +29,6 @@ import {
 } from "../../scripts/iteration-guardrail/lib.mjs";
 import {
   parseZcodeHookPayload,
-  ZcodeHookPayloadSchema,
 } from "../../packages/contracts/src/zcode-hook";
 
 const CMD = "bun run test";
@@ -97,6 +96,25 @@ describe("progress-based counting (lib.mjs, pure)", () => {
     expect(state.lastVerificationFailed).toBe(false);
   });
 
+  it("TRAP: distinct verification commands without edits never arm the same-failure cap (cross-PR duty)", () => {
+    // Three red `gh pr checks` on DIFFERENT PRs in a non-editing session are
+    // distinct verifications (the manager role's cross-PR verification duty),
+    // not retries of one failure: the streak stays at 1 and no deny fires.
+    // Bare-retry counting requires command identity.
+    let state = emptyState();
+    for (const pr of [120, 121, 122]) {
+      state = fail(state, { command: `gh pr checks ${pr}`, outputText: "Some checks were not successful" });
+      expect(state.sameFailStreak, `pr ${pr}`).toBe(1);
+      expect(evaluateDeny(state, defaultCfg), `pr ${pr}`).toBeNull();
+    }
+    // ...while same-command flake retries (no edit between) still increment:
+    // nothing changed, so a different result is flake, not progress.
+    state = fail(state, { command: "gh pr checks 122", outputText: "Some checks were not successful (2 failed)" });
+    state = fail(state, { command: "gh pr checks 122", outputText: "Some checks were not successful (3 failed)" });
+    expect(state.sameFailStreak).toBe(3);
+    expect(evaluateDeny(state, defaultCfg)).toEqual({ cap: "sameFailureCap", count: 3, limit: 3 });
+  });
+
   it("TRAP: flaky bare retry cannot evade the cap", () => {
     // Failures with DIFFERENT outputs but NO state change (no Edit/Write)
     // between cycles are bare retries: any output difference is flake, not
@@ -154,7 +172,7 @@ describe("progress-based counting (lib.mjs, pure)", () => {
     // Applying an indeterminate outcome leaves the state UNCHANGED.
     let state = fail(emptyState());
     const before = { ...state };
-    for (const response of [{ status: "cancelled" }, null, "junk", []]) {
+    for (const response of [{ status: "cancelled" }, null, "junk", [], { status: "completed" }, {}]) {
       state = applyVerificationResult(state, {
         command: CMD,
         outcome: outcomeFromToolResponse(response),
@@ -172,6 +190,14 @@ describe("progress-based counting (lib.mjs, pure)", () => {
     expect(outcomeFromToolResponse({ timedOut: true, status: "completed", exitCode: 0 })).toBe("failed");
     expect(outcomeFromToolResponse({ status: "completed", exitCode: 0 })).toBe("success");
     expect(outcomeFromToolResponse({ exitCode: 0 })).toBe("success");
+    // Success requires POSITIVE exitCode evidence (review A3): a failure
+    // envelope that omits the field must never classify as success — that
+    // would silently reset both counters.
+    expect(outcomeFromToolResponse({ status: "completed" })).toBe("indeterminate");
+    expect(outcomeFromToolResponse({})).toBe("indeterminate");
+    // Status is checked first: a cancelled call is never evidence, even
+    // when the envelope carries a non-zero exitCode.
+    expect(outcomeFromToolResponse({ status: "cancelled", exitCode: 1 })).toBe("indeterminate");
   });
 });
 
@@ -187,26 +213,59 @@ describe("failure signature determinism (lib.mjs)", () => {
     expect(failureSignature(CMD, run1)).toBe(failureSignature(CMD, run2));
   });
 
-  // Property: generated durations, tmp paths and timestamps stand in for live
+  // Property: generated durations, tmp paths, timestamps, pids, clock times,
+  // epoch-millis, memory figures and bracketed counters stand in for live
   // output jitter; the invariant must hold for every generated combination.
   // (Path segments are letters-only so they can never contain a duration
   // token, which is stripped before temp paths are normalized.)
+  const clockArb = fc.record({
+    h: fc.integer({ min: 0, max: 23 }),
+    m: fc.integer({ min: 0, max: 59 }),
+    s: fc.integer({ min: 0, max: 59 }),
+  });
+  const pad2 = (n) => String(n).padStart(2, "0");
+  const renderClock = ({ h, m, s }) => `${pad2(h)}:${pad2(m)}:${pad2(s)}`;
   const volatileJitter = fc.record({
     seconds: fc.integer({ min: 0, max: 9999 }),
     millis: fc.integer({ min: 0, max: 999999 }),
     tmpA: fc.stringMatching(/^[a-zA-Z]{1,12}$/),
     tmpB: fc.stringMatching(/^[a-zA-Z]{1,12}$/),
     epochSeconds: fc.integer({ min: 0, max: 2 ** 30 }),
+    pidA: fc.integer({ min: 1, max: 999999 }),
+    pidB: fc.integer({ min: 1, max: 999999 }),
+    clockA: clockArb,
+    clockB: clockArb,
+    epochMillisA: fc.integer({ min: 10 ** 12, max: 10 ** 13 - 1 }), // exactly 13 digits
+    epochMillisB: fc.integer({ min: 10 ** 12, max: 10 ** 13 - 1 }),
+    memA: fc.integer({ min: 0, max: 9999 }),
+    memB: fc.integer({ min: 0, max: 9999 }),
+    counterA: fc.integer({ min: 0, max: 999 }),
+    counterB: fc.integer({ min: 0, max: 999 }),
   });
   fcTest.prop([volatileJitter])(
     "property: two runs of the same failing command sign identically over generated volatile jitter",
-    ({ seconds, millis, tmpA, tmpB, epochSeconds }) => {
+    ({ seconds, millis, tmpA, tmpB, epochSeconds, pidA, pidB, clockA, clockB, epochMillisA, epochMillisB, memA, memB, counterA, counterB }) => {
       const iso = (s) => new Date(s * 1000).toISOString();
-      const runA = `FAIL auth.test.ts: expected 1 to be 2  at /tmp/${tmpA}  after ${seconds}.${seconds % 10}s  at ${iso(epochSeconds)}`;
-      const runB = `FAIL auth.test.ts: expected 1 to be 2  at /tmp/${tmpB}  after ${millis}ms  at ${iso(epochSeconds + 1)}`;
+      const runA = `FAIL auth.test.ts: expected 1 to be 2  at /tmp/${tmpA}  after ${seconds}.${seconds % 10}s  at ${iso(epochSeconds)}  pid=${pidA}  since ${renderClock(clockA)}  epoch ${epochMillisA}  heap ${memA} MiB  try [${counterA}]`;
+      const runB = `FAIL auth.test.ts: expected 1 to be 2  at /tmp/${tmpB}  after ${millis}ms  at ${iso(epochSeconds + 1)}  pid=${pidB}  since ${renderClock(clockB)}  epoch ${epochMillisB}  heap ${memB}.${memB % 10} KiB  try [${counterB}]`;
       expect(failureSignature(CMD, runA)).toBe(failureSignature(CMD, runB));
     },
   );
+
+  it("TRAP: post-edit volatile jitter (pids, clocks, epoch-millis, memory, counters) cannot disguise the same failure", () => {
+    // The same failure re-emitting fresh volatile tokens, WITH an edit
+    // between: the signatures must still match (jitter normalizes away), so
+    // the streak increments. If volatile tokens made the same failure read
+    // as a fresh signature, every fix-fail cycle would look like progress
+    // and the same-failure cap would be unreachable.
+    const runA = "FAIL auth.test.ts > token expired (pid=4242) at 01:02:03 ts 1767139200000 heap 1.5 MiB attempt [1]";
+    const runB = "FAIL auth.test.ts > token expired (pid=98765) at 10:11:12 ts 1767140200000 heap 512.0 KiB attempt [7]";
+    expect(failureSignature(CMD, runA)).toBe(failureSignature(CMD, runB));
+    let state = fail(emptyState(), { outputText: runA });
+    state = applyStateChange(state);
+    state = fail(state, { outputText: runB });
+    expect(state.sameFailStreak).toBe(2); // same failure after an edit, not progress
+  });
 
   it("a different failing test produces a different signature", () => {
     const a = "FAIL auth.test.ts > token expired";
@@ -408,14 +467,25 @@ describe("hook.mjs subprocess (fail-open and deny at the process boundary)", () 
   const SESSION_A = "sess_guardrail_a";
   const SESSION_B = "sess_guardrail_b";
 
+  // Failure-safe cleanup (review B4): every env created by newEnv() is
+  // removed after each test even when an assertion fails mid-test, so no
+  // guardrail-hook-* directories leak into $TMPDIR.
+  const liveEnvs = [];
   function newEnv() {
     const dir = mkdtempSync(join(tmpdir(), "guardrail-hook-"));
     const stateDir = join(dir, "state");
     mkdirSync(stateDir, { recursive: true });
     const configPath = join(dir, "config.json");
     copyFileSync(join(REPO_ROOT, "scripts", "iteration-guardrail", "config.json"), configPath);
-    return { dir, stateDir, configPath };
+    const env = { dir, stateDir, configPath };
+    liveEnvs.push(env);
+    return env;
   }
+
+  afterEach(() => {
+    for (const env of liveEnvs) rmSync(env.dir, { recursive: true, force: true });
+    liveEnvs.length = 0;
+  });
 
   function stateFileFor(env, sessionId) {
     return join(env.stateDir, `${sessionId}.json`);
@@ -500,7 +570,6 @@ describe("hook.mjs subprocess (fail-open and deny at the process boundary)", () 
     expect(reason).toContain("Never fake done");
     expect(reason).toContain(CMD);
     expect(denied.stderr).toContain('"event":"deny"');
-    rmSync(env.dir, { recursive: true, force: true });
   });
 
   it("TRAP: a breached session does not leak into a fresh session in the same state dir", () => {
@@ -513,7 +582,6 @@ describe("hook.mjs subprocess (fail-open and deny at the process boundary)", () 
     const freshB = runHook(preToolUse(SESSION_B, CMD), env);
     expect(freshB.status).toBe(0);
     expect(freshB.stdout).toBe("");
-    rmSync(env.dir, { recursive: true, force: true });
   });
 
   it("TRAP: corrupted state file fails open with a structured skip event", () => {
@@ -531,7 +599,6 @@ describe("hook.mjs subprocess (fail-open and deny at the process boundary)", () 
     expect(wrongShape.stdout).toBe("");
     expect(wrongShape.stderr).toContain("skip_corrupt_state");
     expect(wrongShape.stderr).toContain("shape validation");
-    rmSync(env.dir, { recursive: true, force: true });
   });
 
   it("fail-open on malformed stdin and contract-rejected payloads", () => {
@@ -541,7 +608,6 @@ describe("hook.mjs subprocess (fail-open and deny at the process boundary)", () 
       expect(r.status, `payload: ${JSON.stringify(raw)}`).toBe(0);
       expect(r.stdout, `payload: ${JSON.stringify(raw)}`).toBe("");
     }
-    rmSync(env.dir, { recursive: true, force: true });
   });
 
   it("fail-open on missing config: warn event, exit 0, no deny output", () => {
@@ -553,7 +619,6 @@ describe("hook.mjs subprocess (fail-open and deny at the process boundary)", () 
     expect(warn.stdout).toBe("");
     expect(warn.stderr).toContain("warn_config");
     expect(warn.stderr).toContain("built-in defaults");
-    rmSync(env.dir, { recursive: true, force: true });
   });
 
   // Formerly BLOCKED (same production bug as the skipped case in section C):
@@ -568,7 +633,6 @@ describe("hook.mjs subprocess (fail-open and deny at the process boundary)", () 
     const denied = runHook(preToolUse(SESSION_A, CMD), env, overrides);
     expect(denied.status).toBe(0);
     expect(JSON.parse(denied.stdout).hookSpecificOutput.permissionDecision).toBe("deny");
-    rmSync(env.dir, { recursive: true, force: true });
   });
 
   it("interrupted failure is not counted: skip_interrupted, and deny needs a real third failure", () => {
@@ -585,7 +649,6 @@ describe("hook.mjs subprocess (fail-open and deny at the process boundary)", () 
     seedFailures(env, SESSION_A, 1);
     const denied = runHook(preToolUse(SESSION_A, CMD), env);
     expect(JSON.parse(denied.stdout).hookSpecificOutput.permissionDecision).toBe("deny");
-    rmSync(env.dir, { recursive: true, force: true });
   });
 
   it("non-verification commands pass through and write no state", () => {
@@ -598,7 +661,6 @@ describe("hook.mjs subprocess (fail-open and deny at the process boundary)", () 
     expect(post.status).toBe(0);
     expect(post.stderr).not.toContain("verification_result");
     expect(existsSync(stateFileFor(env, SESSION_A)), "PostToolUse must not write state").toBe(false);
-    rmSync(env.dir, { recursive: true, force: true });
   });
 
   it("an Edit event records a fix attempt: progress is allowed, bare retries deny", () => {
@@ -623,7 +685,6 @@ describe("hook.mjs subprocess (fail-open and deny at the process boundary)", () 
     for (const out of outputs) seedFailure(env, SESSION_B, { stdout: out });
     const denied = runHook(preToolUse(SESSION_B, CMD), env);
     expect(JSON.parse(denied.stdout).hookSpecificOutput.permissionDecision).toBe("deny");
-    rmSync(env.dir, { recursive: true, force: true });
   });
 
   it("PostToolUseFailure (non-interrupt) counts: deny reachable without any PostToolUse event", () => {
@@ -635,7 +696,6 @@ describe("hook.mjs subprocess (fail-open and deny at the process boundary)", () 
     }
     const denied = runHook(preToolUse(SESSION_A, CMD), env);
     expect(JSON.parse(denied.stdout).hookSpecificOutput.permissionDecision).toBe("deny");
-    rmSync(env.dir, { recursive: true, force: true });
   });
 });
 
@@ -676,15 +736,38 @@ describe("hook payload contract (packages/contracts/src/zcode-hook.ts)", () => {
     expect(parseZcodeHookPayload({ ...pre, future_field: { nested: 1 } }).ok).toBe(true);
   });
 
-  it("ZcodeHookPayloadSchema is the variant backing the parser, covering exactly the three events", () => {
-    // Direct structural check of the schema export (valibot is not hoisted to
-    // the root under the isolated linker, so the schema is asserted by shape).
-    expect(ZcodeHookPayloadSchema.type).toBe("variant");
-    expect(ZcodeHookPayloadSchema.options.map((option) => option.entries.hook_event_name.literal)).toEqual([
-      "PreToolUse",
-      "PostToolUse",
-      "PostToolUseFailure",
-    ]);
+  // Note: the per-event behavioral coverage above already exercises the
+  // schema variant for all three events; structural valibot-AST assertions
+  // were removed (review B3) — they pinned implementation internals.
+
+  // Runtime envelope fixtures (review A5): committed under
+  // scripts/iteration-guardrail/fixtures/, derived from the runtime's
+  // hook-input serialization (each carries a `_meta` provenance note, not a
+  // live capture). They act as a contract-drift regression net: if the
+  // envelope contract drifts from what the runtime actually delivers, these
+  // parses fail.
+  const FIXTURES = new URL("../../scripts/iteration-guardrail/fixtures/", import.meta.url).pathname;
+  const FIXTURE_NAMES = ["pre-tool-use-bash", "post-tool-use-bash-failed", "post-tool-use-edit", "post-tool-use-failure"];
+
+  function readFixture(name) {
+    return JSON.parse(readFileSync(join(FIXTURES, `${name}.json`), "utf8"));
+  }
+
+  it("parses all committed runtime-envelope fixtures against the contract", () => {
+    for (const name of FIXTURE_NAMES) {
+      const payload = readFixture(name);
+      const r = parseZcodeHookPayload(payload);
+      expect(r.ok, `${name}: ${r.ok ? "" : r.reason}`).toBe(true);
+      expect(r.payload.hook_event_name, name).toBe(payload.hook_event_name);
+      expect(r.payload.tool_name, name).toBe(payload.tool_name);
+    }
+  });
+
+  it("classifies the failed Bash fixture's tool_response as failed", () => {
+    const failed = readFixture("post-tool-use-bash-failed");
+    expect(failed.tool_response.status).toBe("completed");
+    expect(failed.tool_response.exitCode).toBe(1);
+    expect(outcomeFromToolResponse(failed.tool_response)).toBe("failed");
   });
 
   it("rejects junk with a reason string and never throws", () => {
