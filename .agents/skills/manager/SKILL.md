@@ -62,9 +62,9 @@ The `model:` ticket labels are produced by the `to-tickets` skill when tickets a
 
 ### 2. Monitor A's CI
 
-- Run `gh pr checks <pr> --watch`.
-- Green → proceed.
-- Red → send A the failing check name and `gh run view --log-failed` output verbatim via your adapter's continue mechanism. Resume the same A (its agent/subagent id) — do not spawn a new implementer unless A has crashed; a model-pinned dispatch that cannot be resumed respawns fresh carrying the logs, after the respawn intake check (see Reliability). Repeat until green or stall (see Reliability).
+- Schedule the PR's CI automation (per the CI protocol in Reliability & supervision) — non-blocking; do not sit in a blocking wait.
+- Green transition → verify once with `gh pr checks <pr>`, then proceed.
+- Red transition → send A the failing check name and `gh run view --log-failed` output verbatim via your adapter's continue mechanism. Resume the same A (its agent/subagent id) — do not spawn a new implementer unless A has crashed; a model-pinned dispatch that cannot be resumed respawns fresh carrying the logs, after the respawn intake check (see Reliability). Keep the automation scheduled — it reports the next transition after A pushes. Repeat until green or stall (see Reliability).
 
 ### 3. Dispatch B (review)
 
@@ -90,6 +90,8 @@ Send A: B's full itemized report (verbatim), and these instructions:
 
 ### 6. Summarize and recommend
 
+- **Cancel the PR's CI automation** (see the CI protocol in Reliability & supervision) — the loop for this PR ends here, and an automation left running keeps firing on a decided PR.
+
 Produce the final user-facing summary:
 
 - **What happened**: scope, what A implemented, the PR URL, CI history (red→green transitions if any).
@@ -105,7 +107,7 @@ Produce the final user-facing summary:
 - **Objective verification over prose.** Every awaited artifact is verified independently (`gh pr view`, `gh pr checks`, `gh api`), not trusted from a subagent's message.
 - **Stall rule.** Configurable: `STALL_MINUTES` (default 30). If a background subagent produces no observable artifact within that window, send one "status?" ping via the continue mechanism. On continued stall, respawn the subagent fresh (new id) after the respawn intake check below, re-issuing the original prompt when no checkpoint exists. After two stalled attempts, escalate to the user.
 - **Respawn intake.** Before respawning fresh for a task whose earlier attempt died (stall respawn, orphan, provider failure, session kill), first recover prior progress so the respawn resumes instead of re-burning exploration from zero. Check, in order — no PR number is needed for any check, because the task branch is known from the dispatch: (1) **pushed commits** on the task branch — `git fetch` then `git log origin/<branch>`; (2) **uncommitted changes** in the task worktree — `git -C <worktree> status --short` (a dirty worktree means the dead attempt was mid-edit); (3) **open draft PR** — `gh pr list --head <branch> --state open --json number,title,isDraft`. Only after (3) locates a PR, read it with `gh pr view <pr>` for its head commit and details. Whatever you find is the **last checkpoint**: the respawn prompt must state it explicitly (branch, head commit, dirty files, PR URL) and instruct the subagent to continue from it — inspect the checkpoint before re-exploring, reuse existing commits, and push to the same branch/PR. Only when all three checks come up empty does the respawn get the original from-scratch prompt.
-- **CI protocol.** `gh pr checks --watch` is the only sanctioned CI-wait mechanism; do not poll in a tight loop.
+- **CI protocol.** Monitor CI with a **per-PR scheduled automation**, non-blocking — never a tight loop. When a PR enters the loop, schedule an automation (on ZCode: a scheduled automation — persistent delay/cron work in the workspace) that runs `gh pr checks <pr> --json` every `CI_POLL_MINUTES` (default 2) and reports only **status transitions**: all checks green, or a check newly failing (with its name). Between transitions it stays silent, and your session stays free to react to in-flight subagents — this replaces blocking `gh pr checks --watch` as the standing wait. One-shot `gh pr checks <pr>` remains the verification tool at completion gates. **Cancel the automation when the PR's loop ends** (merged, closed, parked, or escalated — step 6); a scheduled automation left running keeps firing on a decided PR.
 - **Escalation.** Surface blockers (auth failures, repeated stalls, B-flagged-High rejections without evidence) to the user immediately. Do not silently absorb or decide them.
 
 ## Anti-patterns (do not do these)
