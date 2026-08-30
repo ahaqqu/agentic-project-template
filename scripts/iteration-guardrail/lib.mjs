@@ -70,6 +70,9 @@ function compilePatterns(patterns) {
       continue;
     }
     if (typeof p !== "string" || p.length === 0) continue;
+    // Review C2 hardening: reject oversized patterns outright so a
+    // hand-edited config cannot introduce pathological backtracking.
+    if (p.length > 200) continue;
     try {
       // Repo-owned config is the same trust boundary as the hook command
       // wiring itself (arbitrary code); inputs are short command lines.
@@ -150,15 +153,23 @@ function stripAnsi(text) {
   return text.replace(/\x1B\[[0-9;]*[A-Za-z]/g, "");
 }
 
-// Erase volatile tokens (durations, timestamps, temp paths) so two runs of
-// the same failing command produce the same signature; then collapse
-// whitespace and keep the tail (failure summaries live at the end).
+// Erase volatile tokens (durations, timestamps, temp paths, pids, memory
+// figures, bracketed counters) so two runs of the same failing command
+// produce the same signature; then collapse whitespace and keep the tail
+// (failure summaries live at the end). Over-normalization trades a rare
+// conflated distinct failure for the far worse false negative of the same
+// failure reading as progress.
 export function normalizeOutput(text) {
   if (typeof text !== "string") return "";
   return stripAnsi(text)
-    .replace(/\b\d+(?:\.\d+)?m?s\b/g, "<t>")
     .replace(/\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?\b/g, "<ts>")
+    .replace(/\b\d{13}\b/g, "<ts>")
+    .replace(/\b\d{2}:\d{2}:\d{2}(?:\.\d+)?\b/g, "<clock>")
+    .replace(/\b\d+(?:\.\d+)?m?s\b/g, "<t>")
+    .replace(/\bpid[=: ]\d+|\(\d+\)/gi, "<pid>")
+    .replace(/\b\d+(?:\.\d+)? ?(?:[KMGT]i?B)\b/g, "<mem>")
     .replace(/\/tmp\/[\w./-]+/g, "<tmp>")
+    .replace(/\[\d+\]/g, "<n>")
     .replace(/\s+/g, " ")
     .trim()
     .slice(-2000);
@@ -178,12 +189,13 @@ export function failureSignature(command, outputText) {
   return digest.slice(0, 16);
 }
 
-const FAIL_STATUSES = ["failed", "timed_out"];
-
 // Narrow the runtime-owned Bash tool_response (unknown at the contract
-// boundary) into "success" | "failed" | "indeterminate". Indeterminate
-// outcomes (cancelled, backgrounded, spawn errors, unrecognized shapes) are
-// never counted — an uncounted outcome can only make the guardrail quieter,
+// boundary) into "success" | "failed" | "indeterminate". Success requires
+// POSITIVE evidence (exitCode === 0) — a failure envelope that omits the
+// field must never reset the counters (found by review as A3: the old
+// default treated missing exitCode as success). Indeterminate outcomes
+// (cancelled, backgrounded, spawn errors, unrecognized shapes) are never
+// counted — an uncountable outcome can only make the guardrail quieter,
 // never deny without evidence.
 export function outcomeFromToolResponse(toolResponse) {
   const r = toolResponse;
@@ -193,11 +205,9 @@ export function outcomeFromToolResponse(toolResponse) {
   if (status === "cancelled" || status === "backgrounded" || status === "spawn_error") {
     return "indeterminate";
   }
-  if (status === "completed" || status === undefined) {
-    if (typeof r.exitCode === "number" && r.exitCode !== 0) return "failed";
-    return "success";
-  }
-  if (FAIL_STATUSES.includes(status)) return "failed";
+  if (typeof r.exitCode === "number" && r.exitCode !== 0) return "failed";
+  if (status === "failed" || status === "timed_out") return "failed";
+  if (typeof r.exitCode === "number" && r.exitCode === 0) return "success";
   return "indeterminate";
 }
 
@@ -212,8 +222,12 @@ function previewOf(outputText) {
 
 // Apply one finished verification attempt. Returns the next state; never
 // mutates the input. Bare retries (no Edit/Write since the previous
-// verification) count toward the same-failure streak regardless of output —
-// nothing changed, so a different result is flake, not progress.
+// verification) count toward the same-failure streak ONLY when the SAME
+// command is being retried (review A1): different verification commands
+// failing in a non-editing session are distinct verifications, not retries
+// of one failure — three red `gh pr checks` on different PRs must never arm
+// the same-failure cap. Same-command no-edit reruns still count regardless
+// of output — nothing changed, so a different result is flake, not progress.
 export function applyVerificationResult(state, { command, outcome, outputText }) {
   const next = { ...state };
   if (outcome === "success") {
@@ -226,9 +240,11 @@ export function applyVerificationResult(state, { command, outcome, outputText })
   }
   if (outcome !== "failed") return state; // indeterminate: no evidence, no change
   const signature = failureSignature(command, outputText);
-  const sameFailure =
-    (state.lastVerificationFailed && !state.editSinceLastVerification) ||
-    signature === state.lastSignature;
+  const sameCommandRetry =
+    state.lastVerificationFailed &&
+    !state.editSinceLastVerification &&
+    normalizeCommand(command) === state.lastCommand;
+  const sameFailure = sameCommandRetry || signature === state.lastSignature;
   next.sameFailStreak = sameFailure ? state.sameFailStreak + 1 : 1;
   next.failCyclesSinceSuccess = state.failCyclesSinceSuccess + 1;
   next.lastSignature = signature;
@@ -266,38 +282,7 @@ export function evaluateDeny(state, config) {
   return null;
 }
 
-// The stuck-report escalation instruction carried by EVERY deny (issue #94
-// format). The receiver must be able to act without re-deriving the history.
-export function buildDenyReason(state, config, breach) {
-  return [
-    `ITERATION GUARDRAIL: verification-loop cap reached (${breach.cap}: ${breach.count} failed cycles >= limit ${breach.limit}). Escalate now — do not rerun verification.`,
-    "",
-    "This workspace hook blocks verification reruns after repeated FAILED cycles for the same problem in this session. To continue, stop looping and send the manager a stuck-report containing exactly:",
-    "1. Invariant under test — the property the work must protect, stated so the receiver can verify it.",
-    "2. Exact current failure — the verification command and the precise error output (last recorded signature: " +
-      `${state.lastSignature ?? "unknown"}, command: ${state.lastCommand ?? "unknown"}).`,
-    "3. Attempted fixes — every fix attempt you made, each with its outcome.",
-    "4. Ruled-out hypotheses — what you already eliminated and how.",
-    "5. Checkpoint commit ref — commit your work to the branch FIRST, then record the ref here (escalation must never lose work).",
-    "",
-    "Last recorded failure (truncated): " + (state.lastFailurePreview ?? "unknown"),
-    "",
-    `Caps are configurable in scripts/iteration-guardrail/config.json (sameFailureCap: ${config.sameFailureCap}, distinctFailureCap: ${config.distinctFailureCap}); a fresh session dispatched with a different approach starts with clean counters.`,
-    "",
-    "Never fake done: the completion criterion is unchanged — a PR must exist and all its checks must be green. Do not report success without that evidence; report the stuck-report instead.",
-  ].join("\n");
-}
+// Deny-message construction lives in messages.mjs (review B1 split);
+// re-exported here so consumers and tests keep a single import surface.
+export { buildDenyOutput, buildDenyReason } from "./messages.mjs";
 
-// The exact JSON a PreToolUse hook prints (exit 0) to deny the tool call.
-// Shape verified against the ZCode runtime: hookSpecificOutput.permissionDecision
-// "deny" blocks the call and permissionDecisionReason becomes the tool error
-// the agent sees.
-export function buildDenyOutput(reason) {
-  return JSON.stringify({
-    hookSpecificOutput: {
-      hookEventName: "PreToolUse",
-      permissionDecision: "deny",
-      permissionDecisionReason: reason,
-    },
-  });
-}

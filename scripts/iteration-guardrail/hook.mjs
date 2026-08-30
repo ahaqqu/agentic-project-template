@@ -105,12 +105,16 @@ function loadState(statePath) {
 }
 
 // Atomic replace (tmp + fsync + rename) so a crash never leaves a torn state
-// file that could be misread as evidence.
+// file that could be misread as evidence. Created 0600 in a 0700 dir
+// (review A4): the state lives in the shared $TMPDIR, under the same user as
+// the guarded agent — it is tamperable by that process (advisory guardrail,
+// see docs/ITERATION-GUARDRAIL.md), but it must not be world-readable since
+// it stores command lines and failure-output previews.
 function saveState(statePath, state) {
   const tmp = `${statePath}.tmp-${process.pid}-${Date.now()}`;
   try {
-    mkdirSync(dirname(statePath), { recursive: true });
-    const fd = openSync(tmp, "w");
+    mkdirSync(dirname(statePath), { recursive: true, mode: 0o700 });
+    const fd = openSync(tmp, "w", 0o600);
     try {
       writeFileSync(fd, JSON.stringify({ schemaVersion: STATE_SCHEMA_VERSION, state }));
       fsyncSync(fd);
@@ -154,6 +158,17 @@ function commandFrom(payload) {
   return null;
 }
 
+// Shared plumbing for the three Bash branches (review B2): resolve the
+// command, the effective config, and the session state once. Returns null
+// when the event is not a classified verification call on Bash.
+function resolveVerificationContext(payload, statePath) {
+  const command = commandFrom(payload);
+  if (command === null) return null;
+  const { config } = loadConfig();
+  if (!isVerificationCommand(command, config)) return null;
+  return { command, config, state: loadState(statePath) ?? emptyState() };
+}
+
 async function main() {
   const parsed = parseZcodeHookPayload(JSON.parse(readStdin()));
   if (!parsed.ok) {
@@ -170,18 +185,17 @@ async function main() {
 
   if (payload.hook_event_name === "PreToolUse") {
     if (payload.tool_name !== "Bash") return 0;
-    const command = commandFrom(payload);
-    if (command === null) {
-      emit("skip_no_command", {});
+    const ctx = resolveVerificationContext(payload, statePath);
+    if (!ctx) {
+      // Either not a Bash-with-command payload or not a classified
+      // verification command — both pass through untouched.
+      if (commandFrom(payload) === null) emit("skip_no_command", {});
       return 0;
     }
-    const { config } = loadConfig();
-    if (!isVerificationCommand(command, config)) return 0;
-    const state = loadState(statePath) ?? emptyState();
-    const breach = evaluateDeny(state, config);
+    const breach = evaluateDeny(ctx.state, ctx.config);
     if (breach) {
-      emit("deny", { sessionId, breach, signature: state.lastSignature, streak: state.sameFailStreak });
-      process.stdout.write(`${buildDenyOutput(buildDenyReason(state, config, breach))}\n`);
+      emit("deny", { sessionId, breach, signature: ctx.state.lastSignature, streak: ctx.state.sameFailStreak });
+      process.stdout.write(`${buildDenyOutput(buildDenyReason(ctx.state, ctx.config, breach))}\n`);
       return 0;
     }
     return 0;
@@ -193,17 +207,15 @@ async function main() {
       return 0;
     }
     if (payload.tool_name !== "Bash") return 0;
-    const command = commandFrom(payload);
-    if (command === null) return 0;
-    const { config } = loadConfig();
-    if (!isVerificationCommand(command, config)) return 0;
+    const ctx = resolveVerificationContext(payload, statePath);
+    if (!ctx) return 0;
     const outcome = outcomeFromToolResponse(payload.tool_response);
     const outputText =
       payload.tool_response && typeof payload.tool_response === "object"
         ? `${payload.tool_response.stderr ?? ""}\n${payload.tool_response.stdout ?? ""}`
         : "";
-    emit("verification_result", { sessionId, outcome, command: command.slice(0, 200) });
-    saveState(statePath, applyVerificationResult(loadState(statePath) ?? emptyState(), { command, outcome, outputText }));
+    emit("verification_result", { sessionId, outcome, command: ctx.command.slice(0, 200) });
+    saveState(statePath, applyVerificationResult(ctx.state, { command: ctx.command, outcome, outputText }));
     return 0;
   }
 
@@ -216,18 +228,15 @@ async function main() {
     emit("skip_interrupted", { sessionId });
     return 0;
   }
-  const command = commandFrom(payload);
-  if (command === null) return 0;
-  const { config } = loadConfig();
-  if (!isVerificationCommand(command, config)) return 0;
-  const message = payload.error?.message ?? "";
-  emit("verification_failure_event", { sessionId, command: command.slice(0, 200) });
+  const ctx = resolveVerificationContext(payload, statePath);
+  if (!ctx) return 0;
+  emit("verification_failure_event", { sessionId, command: ctx.command.slice(0, 200) });
   saveState(
     statePath,
-    applyVerificationResult(loadState(statePath) ?? emptyState(), {
-      command,
+    applyVerificationResult(ctx.state, {
+      command: ctx.command,
       outcome: "failed",
-      outputText: message,
+      outputText: payload.error?.message ?? "",
     }),
   );
   return 0;

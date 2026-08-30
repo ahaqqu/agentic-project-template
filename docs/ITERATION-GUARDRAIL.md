@@ -84,3 +84,27 @@ Per-session JSON under `$TMPDIR/zcode-iteration-guardrail/<project-hash>/`
 `ZCODE_GUARDRAIL_CONFIG`). A new session starts with clean counters, which is
 what makes the manager ladder coherent: a re-dispatch with a different approach
 restarts the budget.
+
+**Threat model (review A4).** The state lives in the shared `$TMPDIR`, on disk
+under the same user account as the guarded agent, and that agent can run
+arbitrary shell — so the guardrail is an advisory safety belt against
+stuck-but-cooperative loops, not a tamper-proof boundary: a determined process
+could delete or edit its own state file. Permissions are tightened regardless
+(state dir `0700`, state files `0600`) so the stored command lines and failure
+previews are never world-readable. The previews are kept deliberately (rather
+than hash-only): the deny message's "exact current failure" evidence is
+load-bearing for the stuck-report the receiver must be able to act on.
+
+**Compound commands (review A6).** A compound command containing a
+verification step (`bun run test && git commit -m ...`) is classified as a
+verification command and can be denied at a breached cap — run the checkpoint
+commit as its own command. The deny message says so. Exempting git-write
+compound commands from classification was rejected: `bun run test && git
+commit` would become a trivial cap-evasion channel.
+
+**Envelope fixtures (review A5).** `scripts/iteration-guardrail/fixtures/`
+holds runtime-derived hook payloads (full envelope, including fields the
+guardrail ignores) parsed by the CI suite, so a contract drift from the live
+envelope fails CI instead of silently disabling the hook. They are derived
+from the runtime's hook-input serialization, not yet replaced by a redacted
+live capture.
