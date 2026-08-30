@@ -42,11 +42,16 @@ export const DEFAULT_VERIFICATION_PATTERNS = [
   "\\bgh pr checks?\\b",
 ];
 
+// The internal config shape ALWAYS carries compiled RegExp patterns — every
+// producer (defaultConfig, normalizeConfig, hook loadConfig's fallbacks) goes
+// through this function, so isVerificationCommand can never receive strings.
+// (Bug found by the issue #98 test suite: string defaults used to leak into
+// every fallback path, making the hook inert on exactly those paths.)
 export function defaultConfig() {
   return {
     sameFailureCap: DEFAULT_SAME_FAILURE_CAP,
     distinctFailureCap: DEFAULT_DISTINCT_FAILURE_CAP,
-    verificationPatterns: [...DEFAULT_VERIFICATION_PATTERNS],
+    verificationPatterns: compilePatterns(DEFAULT_VERIFICATION_PATTERNS),
   };
 }
 
@@ -58,6 +63,12 @@ function compilePatterns(patterns) {
   if (!Array.isArray(patterns)) return null;
   const compiled = [];
   for (const p of patterns) {
+    // Already-compiled entries (e.g. normalizeConfig(defaultConfig())) pass
+    // through untouched; strings are compiled; junk is skipped (fail-open).
+    if (p instanceof RegExp) {
+      compiled.push(p);
+      continue;
+    }
     if (typeof p !== "string" || p.length === 0) continue;
     try {
       // Repo-owned config is the same trust boundary as the hook command
