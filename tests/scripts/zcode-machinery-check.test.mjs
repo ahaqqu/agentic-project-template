@@ -77,7 +77,8 @@ const validConfig = {
 function roleBody(model, thoughtLevel = "high") {
   const lines = ["---", "name: implementer", "background: true", "tools: ['*']"];
   if (model !== undefined) lines.push(`model: ${model}`);
-  if (thoughtLevel !== undefined) lines.push(`thoughtLevel: ${thoughtLevel}`);
+  // null = omit the field entirely (distinct from the "high" default).
+  if (thoughtLevel !== null) lines.push(`thoughtLevel: ${thoughtLevel}`);
   lines.push("---", "", "Body.", "");
   return lines.join("\n");
 }
@@ -163,10 +164,12 @@ describe("checkRoleFile", () => {
   it("fails on a missing or invalid thoughtLevel and on a non-high dispatched role", () => {
     const dir = fixture();
     const agents = join(dir, ".zcode", "agents");
+    // "no-level" (field omitted via null) and "bad-level" are fork-added role
+    // names; "reviewer" is a dispatched role, which must pin exactly high.
     for (const [name, thoughtLevel] of [
-      ["no-level", undefined],
+      ["no-level", null],
       ["bad-level", "ultra"],
-      ["not-high", "max"],
+      ["reviewer", "max"],
     ]) {
       const file = `${name}.md`;
       writeFileSync(join(agents, file), roleBody(MODEL_PIN, thoughtLevel));
@@ -209,6 +212,18 @@ describe("checkZcodeMachinery", () => {
 });
 
 describe("zcode-pin-check.mjs (preflight script)", () => {
+  /** Fake HOME whose ZCode client config declares an `ollama` provider that
+   * does NOT carry the fixture's model — a stale pin. */
+  function homeWithStaleOllama() {
+    const home = mkdtempSync(join(tmpdir(), "zcode-home-"));
+    mkdirSync(join(home, ".zcode", "v2"), { recursive: true });
+    writeFileSync(
+      join(home, ".zcode", "v2", "config.json"),
+      JSON.stringify({ provider: { ollama: { models: { "glm-5.3:cloud": {} } } } }),
+    );
+    return home;
+  }
+
   function runScript(rootDir, homeDir) {
     return spawnSync("bun", [PIN_CHECK], {
       cwd: process.cwd(),
@@ -225,11 +240,13 @@ describe("zcode-pin-check.mjs (preflight script)", () => {
     const dir = fixture({
       implementer: roleBody("ollama/nonexistent-model:cloud"),
     });
-    const r = runScript(dir);
+    const home = homeWithStaleOllama();
+    const r = runScript(dir, home);
     expect(r.status).toBe(0);
     expect(r.stdout).toContain("⚠ implementer: ollama/nonexistent-model:cloud");
     expect(r.stdout).toContain("drift warning, not a gate failure");
     rmSync(dir, { recursive: true, force: true });
+    rmSync(home, { recursive: true, force: true });
   });
 
   it("exits 0 with a warning when there is no client config (CI-like)", () => {
@@ -242,7 +259,7 @@ describe("zcode-pin-check.mjs (preflight script)", () => {
   });
 
   it("exits 1 when a role file is missing its thoughtLevel pin", () => {
-    const dir = fixture({ implementer: roleBody(MODEL_PIN, undefined) });
+    const dir = fixture({ implementer: roleBody(MODEL_PIN, null) });
     const r = runScript(dir);
     expect(r.status).toBe(1);
     expect(r.stderr).toContain("no thoughtLevel pin");

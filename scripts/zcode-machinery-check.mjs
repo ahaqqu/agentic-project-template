@@ -67,12 +67,20 @@ function fieldValues(frontmatter, key) {
 }
 
 /** A hook counts as wired when some event entry declares it, enabled, under
- * the given event/matcher — matched by the hook script path in its args. */
+ * the given event/matcher — matched by the hook script path in its args.
+ * The template wires hooks as "${ZCODE_PROJECT_DIR}/<script>", so the arg
+ * matches on the script path suffix (or an exact bare path). */
+function argsInvokeHook(args, hookScript) {
+  return (args ?? []).some(
+    (a) => typeof a === "string" && (a === hookScript || a.endsWith(`/${hookScript}`)),
+  );
+}
+
 function hookWired(config, event, matcher, hookScript) {
   for (const entry of config?.hooks?.events?.[event] ?? []) {
     if (entry.matcher !== matcher) continue;
     for (const hook of entry.hooks ?? []) {
-      if (hook.enabled !== false && (hook.args ?? []).includes(hookScript)) {
+      if (hook.enabled !== false && argsInvokeHook(hook.args, hookScript)) {
         return true;
       }
     }
