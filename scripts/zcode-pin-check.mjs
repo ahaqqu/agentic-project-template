@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
-// zcode-pin-check.mjs — verify every role-agent model pin resolves on ZCode.
+// zcode-pin-check.mjs — verify every role-agent model pin resolves on ZCode
+// and every dispatched role pins a valid `thoughtLevel` variant.
 //
 // The role agents' model pins live in .zcode/agents/<role>.md frontmatter
 // (the single source of truth for every harness). On ZCode a pin of the form
@@ -21,6 +22,16 @@
 // key in Settings) — this script never writes the client config: the entry
 // carries credentials and its UUID keying is owned by the client UI, not us.
 // Extra model ids are checked via an explicit `--check <provider>/<model>`.
+//
+// Every dispatched role must also pin `thoughtLevel:` (the reasoning variant).
+// ZCode resolves the variant from the provider's `defaultVariant` when the
+// profile pins only `model:` — GLM-5.3 ships `defaultVariant: "max"`, and an
+// unpinned dispatch ran an entire implementation at `max` instead of the
+// intended `high` (issues #94/#96). So this gate fails when a role file omits
+// `thoughtLevel:` or pins a value outside the set the harness validates
+// (low/medium/high/xhigh/max). It cannot read the client's runtime variant
+// choice — for recorded evidence, check the telemetry DB's variant column
+// after a real dispatch (issue #96).
 import { readFile, readdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -46,8 +57,11 @@ for (let i = 0; i < argv.length; i++) {
   }
 }
 
-/** Read a frontmatter `model:` value, or null when the file carries none. */
-async function readPin(file) {
+/** Reasoning variants the harness validates `thoughtLevel:` against. */
+const THOUGHT_LEVELS = new Set(["low", "medium", "high", "xhigh", "max"]);
+
+/** Read a frontmatter `key:` value, or null when the file carries none. */
+async function readField(file, key) {
   let text;
   try {
     text = await readFile(join(ROLES_DIR, file), "utf8");
@@ -56,7 +70,7 @@ async function readPin(file) {
   }
   const fm = text.match(/^---\r?\n([\s\S]*?)\r?\n---/);
   if (!fm) return null;
-  return fm[1].match(/^model:\s*(.+)\s*$/m)?.[1] ?? null;
+  return fm[1].match(new RegExp(`^${key}:\\s*(.+)\\s*$`, "m"))?.[1] ?? null;
 }
 
 let config;
@@ -78,27 +92,36 @@ try {
 }
 
 const checks = [];
+let variantPins = 0;
 for (const file of roleFiles) {
   const role = file.replace(/\.md$/, "");
-  const raw = await readPin(file);
+  const raw = await readField(file, "model");
   if (raw === null) {
     console.log(`− ${role}: no pin — ZCode uses the session default; nothing to check`);
-    continue;
+  } else {
+    const value = raw.trim();
+    if (value === "inherit") {
+      console.log(`− ${role}: inherit — ZCode uses the session default; nothing to check`);
+    } else if (value === "lite") {
+      fail(`${role}: pin value "lite" has no verified ZCode provider mapping — make the pin concrete in .zcode/agents/${file}`);
+    } else {
+      checks.push({ label: role, ref: value });
+    }
   }
-  const value = raw.trim();
-  if (value === "inherit") {
-    console.log(`− ${role}: inherit — ZCode uses the session default; nothing to check`);
-    continue;
+  const level = (await readField(file, "thoughtLevel"))?.trim() ?? null;
+  if (level === null) {
+    fail(`${role}: no thoughtLevel pin — ZCode resolves the reasoning variant from the provider's defaultVariant when the profile pins only model: (GLM-5.3 ships defaultVariant "max"; issues #94/#96) — pin thoughtLevel in .zcode/agents/${file}`);
   }
-  if (value === "lite")
-    fail(`${role}: pin value "lite" has no verified ZCode provider mapping — make the pin concrete in .zcode/agents/${file}`);
-  checks.push({ label: role, ref: value });
+  if (!THOUGHT_LEVELS.has(level)) {
+    fail(`${role}: thoughtLevel "${level}" is not in the set the harness validates (low/medium/high/xhigh/max) — fix the pin in .zcode/agents/${file}`);
+  }
+  console.log(`✓ ${role}: thoughtLevel ${level} — the variant cannot fall through to the provider default`);
+  variantPins++;
 }
 for (const ref of extraRefs) checks.push({ label: "(--check)", ref });
 
 if (checks.length === 0) {
   console.log("✓ no pinned roles to check");
-  process.exit(0);
 }
 
 let failures = 0;
@@ -128,4 +151,4 @@ if (failures > 0) {
   );
   process.exit(1);
 }
-console.log(`✓ all ${checks.length} pinned role(s) resolve in the ZCode provider config (${CONFIG})`);
+console.log(`✓ all ${checks.length} pinned role model(s) and ${variantPins} thoughtLevel pin(s) resolve in the ZCode provider config (${CONFIG})`);
