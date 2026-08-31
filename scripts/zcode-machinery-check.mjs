@@ -12,9 +12,14 @@
 //      cannot silently run unguarded (the guardrail) or unmeasured
 //      (telemetry) after a sync.
 //   2. Every role file in `.zcode/agents/` (README.md excluded) carries a
-//      concrete `model: <providerId>/<model>` pin — `inherit`, `lite`, a bare
-//      model id, or an absent pin fails — and a `thoughtLevel:` pin (valid
-//      value; the dispatched roles pin exactly `high`).
+//      concrete `model:` pin — `builtin:<providerId>/<model>` or the client's
+//      custom-provider scheme `custom:<uuid>:<model>`; `inherit`, `lite`, a
+//      bare model id, or an absent pin fails. The gate recognizes both pin
+//      shapes unquoted and quoted (ZCode's agent editor rewrites role files
+//      with quoted values on save — PR #130). `thoughtLevel:` is
+//      client-managed: ZCode writes `enabled` (or drops the field) when it
+//      rewrites a role file, so the gate requires only that the field is
+//      unambiguous (no duplicate keys), never a specific value.
 //
 // Deliberately NOT here: whether a pin resolves in the *local* ZCode provider
 // config (`~/.zcode/v2/config.json`). That is environment-dependent — CI has
@@ -27,13 +32,15 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
-/** Reasoning variants the harness validates `thoughtLevel:` against. */
+/** Reasoning variants the harness historically validated `thoughtLevel:`
+ * against. ZCode now owns this field — its agent editor pins `enabled` (an
+ * opaque client knob) or drops the field entirely when saving a role file —
+ * so the gate no longer enforces a value set; kept exported for the pin
+ * checker's reporting. */
 export const THOUGHT_LEVELS = new Set(["low", "medium", "high", "xhigh", "max"]);
 
-/** Roles the manager dispatches (the pinned-defaults table in
- * .zcode/agents/README.md); these must pin exactly `thoughtLevel: high`.
- * Matched by role-file name, so fork-added or renamed roles fall back to the
- * THOUGHT_LEVELS set check. */
+/** Roles the manager dispatches. Kept as the dispatch registry for tooling;
+ * no gate rule keys off it anymore (thoughtLevel is client-managed). */
 export const DISPATCHED_ROLES = new Set([
   "implementer",
   "senior-implementer",
@@ -64,13 +71,26 @@ const FRONTMATTER_FIELDS = {
 const GUARDRAIL_HOOK = "scripts/iteration-guardrail/hook.mjs";
 const USAGE_HOOK = "scripts/agent-usage-metadata/hook.mjs";
 
+/** A concrete model ref the client can resolve without a session default:
+ * either `<providerId>/<model>` (builtin-style, e.g.
+ * builtin:zai-start-plan/GLM-5.3-Flash — any ref with a `/` separator) or
+ * ZCode's custom-provider scheme `custom:<uuid>:<model>` (no `/`; the
+ * client maps the uuid to a configured custom provider — PR #130's pins).
+ * `inherit`/`lite` are handled by the caller, before this check. */
+function isConcreteModelRef(model) {
+  return model.includes("/") || /^custom:[^:]+:.+$/.test(model);
+}
+
 /** Trimmed value of every occurrence of a frontmatter field, in file order.
- * Empty occurrences are dropped, so an empty `key:` counts as absent. */
+ * Empty occurrences are dropped, so an empty `key:` counts as absent. A
+ * YAML double- or single-quoted scalar (ZCode's agent editor quotes values
+ * on save, e.g. model: "custom:<uuid>:<model>") is unquoted before the
+ * quote characters are part of the value the gate compares. */
 function fieldValues(frontmatter, key) {
   const pattern = FRONTMATTER_FIELDS[key];
   if (!pattern) throw new Error(`unsupported frontmatter key "${key}"`);
   return [...frontmatter.matchAll(pattern)]
-    .map((m) => m[1].trim())
+    .map((m) => m[1].trim().replace(/^"(.*)"$/s, "$1").replace(/^'(.*)'$/s, "$1").trim())
     .filter((v) => v.length > 0);
 }
 
@@ -125,9 +145,11 @@ export function checkHookWiring(config, configPath) {
   return errors;
 }
 
-/** Role-file structural check (issue #125 task 3b): concrete `model:` pin +
- * `thoughtLevel:` pin. Returns { errors, role } — role is the resolved pin
- * record for provider resolution, or null when the file is not checkable. */
+/** Role-file structural check (issue #125, relaxed on PR #130): concrete
+ * `model:` pin; `thoughtLevel:` checked for duplicate-key ambiguity only
+ * (client-managed field). Returns { errors, role } — role is the resolved
+ * pin record for provider resolution, or null when the file is not
+ * checkable. */
 export function checkRoleFile(file, rolesDir) {
   const role = file.replace(/\.md$/, "");
   const path = join(rolesDir, file);
@@ -163,15 +185,18 @@ export function checkRoleFile(file, rolesDir) {
     );
   } else if (model === "inherit" || model === "lite") {
     errors.push(
-      `${path}: model pin "${model}" is not a concrete ref — the template ships concrete pins (issue #125); pin <providerId>/<model>, e.g. builtin:zai-start-plan/GLM-5.3-Flash; ${fix}`,
+      `${path}: model pin "${model}" is not a concrete ref — the template ships concrete pins (issue #125); pin builtin:<providerId>/<model> or the client's custom-provider scheme custom:<uuid>:<model>; ${fix}`,
     );
-  } else if (!model.includes("/")) {
+  } else if (!isConcreteModelRef(model)) {
     errors.push(
-      `${path}: model pin "${model}" is a bare model id — ZCode resolves it against the session default provider, which no static gate can verify; pin it as <providerId>/<model>; ${fix}`,
+      `${path}: model pin "${model}" is a bare model id — ZCode resolves it against the session default provider, which no static gate can verify; pin builtin:<providerId>/<model> or custom:<uuid>:<model>; ${fix}`,
     );
-  } else if (STALE_PROVIDER_IDS.has(model.split("/")[0])) {
+  } else if (
+    model.includes("/") &&
+    STALE_PROVIDER_IDS.has(model.split("/")[0])
+  ) {
     errors.push(
-      `${path}: model pin "${model}" names a known-stale, non-caching channel ("${model.split("/")[0]}") — the template pins the caching channel builtin:zai-start-plan/GLM-5.3-Flash (issue #125); re-pin it, or use the user-scope override ~/.zcode/agents/${file} which no sync touches`,
+      `${path}: model pin "${model}" names a known-stale, non-caching channel ("${model.split("/")[0]}") — the template pins the caching channel (issue #125); re-pin it, or use the user-scope override ~/.zcode/agents/${file} which no sync touches`,
     );
   }
 
@@ -183,26 +208,16 @@ export function checkRoleFile(file, rolesDir) {
     );
   }
   thoughtLevel = levelValues.at(-1) ?? null;
-  if (thoughtLevel === null) {
-    errors.push(
-      `${path}: no thoughtLevel pin — ZCode resolves the reasoning variant from the provider's defaultVariant when the profile pins only model: (GLM-5.3 ships defaultVariant "max"; issues #94/#96); pin thoughtLevel in .zcode/agents/${file}`,
-    );
-  } else if (!THOUGHT_LEVELS.has(thoughtLevel)) {
-    errors.push(
-      `${path}: thoughtLevel "${thoughtLevel}" is not in the set the harness validates (low/medium/high/xhigh/max) — fix the pin`,
-    );
-    thoughtLevel = null;
-  } else if (DISPATCHED_ROLES.has(role) && thoughtLevel !== "high") {
-    errors.push(
-      `${path}: dispatched roles pin thoughtLevel: high exactly (got "${thoughtLevel}") — see .zcode/agents/README.md "Thought level"`,
-    );
-    thoughtLevel = null;
-  }
+  // No value-set or exact-value rule: thoughtLevel is client-managed —
+  // ZCode's agent editor pins `enabled` (its own knob) or drops the
+  // field entirely when it rewrites a role file (PR #130), and which
+  // reasoning variants are valid is the harness's concern, not a static
+  // gate's. Only the duplicate-key ambiguity above hard-fails.
 
   return {
     errors,
     role:
-      model !== null && model.includes("/") && thoughtLevel !== null
+      model !== null && isConcreteModelRef(model)
         ? { role, file, model, thoughtLevel }
         : null,
   };

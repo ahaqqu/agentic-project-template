@@ -6,9 +6,11 @@
 // checks `bun run template-gate` enforces, so CI gates them too):
 //   - .zcode/config.json hook wiring missing or disabled (guardrail /
 //     telemetry hooks),
-//   - a role file without a concrete `model: <providerId>/<model>` pin,
-//   - a role file without a valid `thoughtLevel:` pin (dispatched roles:
-//     exactly high).
+//   - a role file without a concrete `model:` pin (builtin-style
+//     `<providerId>/<model>` or the client's custom-provider scheme
+//     `custom:<uuid>:<model>`),
+//   - a role file with an ambiguous `thoughtLevel:` (duplicate keys; the
+//     value itself is client-managed, so no pin required — PR #130).
 //
 // Drift warnings (visible, never a gate failure): whether a pin resolves in
 // the *local* ZCode provider config. A pin of the form `<providerId>/<model>`
@@ -74,7 +76,7 @@ const { errors, roles } = checkZcodeMachinery(ROOT);
 
 let resolved = 0;
 for (const { role, model, thoughtLevel } of roles) {
-  console.log(`✓ ${role}: model ${model} (concrete pin), thoughtLevel ${thoughtLevel} — the variant cannot fall through to the provider default`);
+  console.log(`✓ ${role}: model ${model} (concrete pin), thoughtLevel ${thoughtLevel ?? "unset (client-managed)"}`);
   resolved++;
 }
 if (roles.length === 0 && errors.length === 0) {
@@ -102,10 +104,26 @@ try {
 const modelsOf = (entry) => new Set(Object.keys(entry?.models ?? {}));
 
 let warnings = 0;
+/** Split a concrete model ref into { providerId, modelId }. Two shapes:
+ * builtin-style `<providerId>/<model>` (any `/` ref), and ZCode's
+ * custom-provider scheme `custom:<uuid>:<model>` (PR #130) — the provider
+ * entry in the client config is keyed by the bare uuid and the model id is
+ * URL-encoded (`glm-5.3-flash%3Acloud` → `glm-5.3-flash:cloud`). */
+function splitPin(ref) {
+  if (ref.startsWith("custom:")) {
+    const second = ref.indexOf(":", "custom:".length);
+    if (second === -1) return { providerId: ref, modelId: ref };
+    return {
+      providerId: ref.slice("custom:".length, second),
+      modelId: decodeURIComponent(ref.slice(second + 1)),
+    };
+  }
+  return { providerId: ref.split("/")[0], modelId: ref.split("/").pop() ?? ref };
+}
+
 function resolvePin(label, ref) {
   if (!providers) return; // config unreadable — already warned once
-  const providerId = ref.split("/")[0];
-  const modelId = ref.split("/").pop() ?? ref;
+  const { providerId, modelId } = splitPin(ref);
   const entry = providers[providerId];
   let verdict;
   if (!entry) {
@@ -136,5 +154,5 @@ if (warnings > 0) {
   );
 }
 console.log(
-  `✓ machinery gate passed: hook wiring present and enabled, ${resolved} role file(s) carry concrete model pins and thoughtLevel pins (dispatched roles: high)`,
+  `✓ machinery gate passed: hook wiring present and enabled, ${resolved} role file(s) carry concrete model pins (thoughtLevel is client-managed)`,
 );

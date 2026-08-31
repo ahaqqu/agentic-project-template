@@ -13,6 +13,11 @@ import { join } from "node:path";
 /** The concrete caching-channel pin the template ships on every role. */
 export const MODEL_PIN = "builtin:zai-start-plan/GLM-5.3-Flash";
 
+/** ZCode's custom-provider pin scheme — the shape the client writes into
+ * role files when a model is picked in its agent editor (PR #130). */
+export const CUSTOM_MODEL_PIN =
+  "custom:d5585e04-940a-41f6-a9ec-320bb4fccd7e:glm-5.3-flash%3Acloud";
+
 /** Fresh deep copy of the template-shaped hook wiring: the exact shape
  * checkHookWiring expects — six event/matcher/script tuples, all enabled. */
 export function machineryConfig() {
@@ -68,11 +73,19 @@ export function machineryConfig() {
 }
 
 /** Role-file body with frontmatter. `model === undefined` omits the field
- * entirely (distinct from `inherit`/`lite`); `thoughtLevel === null` omits
- * that field (distinct from a value). */
+ * entirely (distinct from `inherit`/`lite`); a model containing `:` (the
+ * custom-provider scheme) is emitted double-quoted, the way ZCode's agent
+ * editor saves role files (PR #130); other models are emitted bare.
+ * `thoughtLevel === null` omits that field (distinct from a value). */
 export function roleBody(model, thoughtLevel = "high") {
   const lines = ["---", "name: implementer", "background: true", "tools: ['*']"];
-  if (model !== undefined) lines.push(`model: ${model}`);
+  if (model !== undefined) {
+    lines.push(
+      model.includes(":") && !model.includes("/")
+        ? `model: "${model}"`
+        : `model: ${model}`,
+    );
+  }
   if (thoughtLevel !== null) lines.push(`thoughtLevel: ${thoughtLevel}`);
   lines.push("---", "", "Body.", "");
   return lines.join("\n");

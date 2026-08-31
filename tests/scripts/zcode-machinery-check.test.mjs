@@ -1,7 +1,12 @@
-// Test suite for the .zcode/ machinery gate (issue #125). The invariants:
+// Test suite for the .zcode/ machinery gate (issue #125, relaxed on PR #130).
+// The invariants:
 // - checkZcodeMachinery hard-fails when the hook wiring is missing/disabled,
-//   when a role file lacks a concrete `model:` pin, or when a role file lacks
-//   a valid `thoughtLevel:` pin (dispatched roles: exactly high).
+//   when a role file lacks a concrete `model:` pin (builtin-style
+//   `<providerId>/<model>` or the client's custom-provider scheme
+//   `custom:<uuid>:<model>`, quoted or unquoted), or when a role file's
+//   `thoughtLevel:` is ambiguous (duplicate keys) — the value itself is
+//   client-managed (ZCode writes `enabled` or drops the field), so no value
+//   pin is required.
 // - The zcode:preflight script (zcode-pin-check.mjs) reports a stale pin —
 //   one that cannot resolve in the local provider config — as a visible
 //   drift WARNING and still exits 0, because CI has no ~/.zcode/v2/config.json;
@@ -22,6 +27,7 @@ import {
 // The expected machinery shape has ONE test-side source of truth (review B3
 // on PR #127): this shared builder, asserted against the gate below.
 import {
+  CUSTOM_MODEL_PIN,
   MODEL_PIN,
   machineryConfig,
   machineryTmpFixture as fixture,
@@ -84,6 +90,35 @@ describe("checkRoleFile", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
+  it("accepts the PR #130 shapes: quoted custom: pin + client-managed thoughtLevel", () => {
+    // ZCode's agent editor saves role files with quoted values and a
+    // custom-provider model ref; the gate must resolve the same pin.
+    const dir = mkdtempSync(join(tmpdir(), "zcode-custom-"));
+    const agents = join(dir, ".zcode", "agents");
+    mkdirSync(agents, { recursive: true });
+    // Quoted custom: pin, thoughtLevel high.
+    writeFileSync(
+      join(agents, "quoted-high.md"),
+      roleBody(CUSTOM_MODEL_PIN),
+    );
+    // Quoted custom: pin, thoughtLevel `enabled` — the client's own knob.
+    writeFileSync(
+      join(agents, "quoted-enabled.md"),
+      roleBody(CUSTOM_MODEL_PIN, "enabled"),
+    );
+    // Quoted custom: pin, no thoughtLevel at all.
+    writeFileSync(
+      join(agents, "quoted-omitted.md"),
+      roleBody(CUSTOM_MODEL_PIN, null),
+    );
+    for (const file of ["quoted-high.md", "quoted-enabled.md", "quoted-omitted.md"]) {
+      const { errors, role } = checkRoleFile(file, agents);
+      expect(errors).toEqual([]);
+      expect(role.model).toBe(CUSTOM_MODEL_PIN);
+    }
+    rmSync(dir, { recursive: true, force: true });
+  });
+
   it("fails on a missing, inherit, lite, or bare model pin", () => {
     const dir = fixture();
     const agents = join(dir, ".zcode", "agents");
@@ -102,25 +137,26 @@ describe("checkRoleFile", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  it("fails on a missing or invalid thoughtLevel and on a non-high dispatched role", () => {
+  it("treats thoughtLevel as client-managed: any value, or none, is accepted", () => {
     const dir = fixture();
     const agents = join(dir, ".zcode", "agents");
-    // "no-level" (field omitted via null) and "bad-level" are fork-added role
-    // names; "reviewer" is a dispatched role, which must pin exactly high.
+    // ZCode writes `enabled` (or omits the field) when it saves a role file;
+    // neither may fail the gate (PR #130).
     for (const [name, thoughtLevel] of [
-      ["no-level", null],
-      ["bad-level", "ultra"],
-      ["reviewer", "max"],
+      ["enabled", "enabled"],
+      ["omitted", null],
+      ["max-value", "max"],
     ]) {
       const file = `${name}.md`;
       writeFileSync(join(agents, file), roleBody(MODEL_PIN, thoughtLevel));
-      const { errors } = checkRoleFile(file, agents);
-      expect(errors[0]).toContain(file);
+      const { errors, role } = checkRoleFile(file, agents);
+      expect(errors).toEqual([]);
+      expect(role.thoughtLevel).toBe(thoughtLevel);
     }
     rmSync(dir, { recursive: true, force: true });
   });
 
-  it("allows a fork-added role any validated thoughtLevel but still requires a concrete pin", () => {
+  it("allows any validated thoughtLevel but still requires a concrete pin", () => {
     const dir = fixture();
     const agents = join(dir, ".zcode", "agents");
     const file = "fork-role.md";
@@ -267,11 +303,11 @@ describe("zcode-pin-check.mjs (preflight script)", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  it("exits 1 when a role file is missing its thoughtLevel pin", () => {
+  it("exits 0 when a role file omits thoughtLevel (client-managed, PR #130)", () => {
     const dir = fixture({ implementer: roleBody(MODEL_PIN, null) });
     const r = runScript(dir);
-    expect(r.status).toBe(1);
-    expect(r.stderr).toContain("no thoughtLevel pin");
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("machinery gate passed");
     rmSync(dir, { recursive: true, force: true });
   });
 
