@@ -19,98 +19,39 @@ import {
   checkRoleFile,
   checkZcodeMachinery,
 } from "../../scripts/zcode-machinery-check.mjs";
+// The expected machinery shape has ONE test-side source of truth (review B3
+// on PR #127): this shared builder, asserted against the gate below.
+import {
+  MODEL_PIN,
+  machineryConfig,
+  machineryTmpFixture as fixture,
+  roleBody,
+} from "./helpers/zcode-machinery-fixture.mjs";
 
 const PIN_CHECK = join(process.cwd(), "scripts/zcode-pin-check.mjs");
-const MODEL_PIN = "builtin:zai-start-plan/GLM-5.3-Flash";
-
-/** Full template-shaped hook wiring (the shape the gate expects). */
-const validConfig = {
-  hooks: {
-    enabled: true,
-    events: {
-      PreToolUse: [
-        {
-          matcher: "Bash",
-          hooks: [
-            { type: "process", command: "bun", args: ["scripts/iteration-guardrail/hook.mjs"], enabled: true },
-          ],
-        },
-      ],
-      PostToolUse: [
-        {
-          matcher: "Bash",
-          hooks: [
-            { type: "process", command: "bun", args: ["scripts/iteration-guardrail/hook.mjs"], enabled: true },
-          ],
-        },
-        {
-          matcher: "Edit|Write",
-          hooks: [
-            { type: "process", command: "bun", args: ["scripts/iteration-guardrail/hook.mjs"], enabled: true },
-          ],
-        },
-        {
-          matcher: "Agent",
-          hooks: [
-            { type: "process", command: "bun", args: ["scripts/agent-usage-metadata/hook.mjs"], enabled: true },
-          ],
-        },
-        {
-          matcher: "TaskOutput",
-          hooks: [
-            { type: "process", command: "bun", args: ["scripts/agent-usage-metadata/hook.mjs"], enabled: true },
-          ],
-        },
-      ],
-      PostToolUseFailure: [
-        {
-          matcher: "Bash",
-          hooks: [
-            { type: "process", command: "bun", args: ["scripts/iteration-guardrail/hook.mjs"], enabled: true },
-          ],
-        },
-      ],
-    },
-  },
-};
-
-function roleBody(model, thoughtLevel = "high") {
-  const lines = ["---", "name: implementer", "background: true", "tools: ['*']"];
-  if (model !== undefined) lines.push(`model: ${model}`);
-  // null = omit the field entirely (distinct from the "high" default).
-  if (thoughtLevel !== null) lines.push(`thoughtLevel: ${thoughtLevel}`);
-  lines.push("---", "", "Body.", "");
-  return lines.join("\n");
-}
-
-function fixture(over = {}) {
-  const dir = mkdtempSync(join(tmpdir(), "zcode-machinery-"));
-  mkdirSync(join(dir, ".zcode", "agents"), { recursive: true });
-  writeFileSync(join(dir, ".zcode", "config.json"), JSON.stringify(over.config ?? validConfig));
-  writeFileSync(
-    join(dir, ".zcode", "agents", "implementer.md"),
-    over.implementer ?? roleBody(MODEL_PIN),
-  );
-  writeFileSync(join(dir, ".zcode", "agents", "README.md"), "# registry\n");
-  return dir;
-}
 
 function wireOnly(config) {
   return { errors: checkHookWiring(config, ".zcode/config.json") };
 }
 
 describe("checkHookWiring", () => {
+  it("accepts the fixture builder's config — the shared shape satisfies the gate", () => {
+    // Review B3 on PR #127: the fixture builder is the single source of truth;
+    // if the gate's expected shape and this config ever diverge, this fails.
+    expect(wireOnly(machineryConfig()).errors).toEqual([]);
+  });
+
   it("accepts the template shape: guardrail + usage hooks present and enabled", () => {
-    expect(wireOnly(validConfig).errors).toEqual([]);
+    expect(wireOnly(machineryConfig()).errors).toEqual([]);
   });
 
   it("fails when hooks are globally disabled", () => {
-    const errors = wireOnly({ hooks: { ...validConfig.hooks, enabled: false } }).errors;
+    const errors = wireOnly({ hooks: { ...machineryConfig().hooks, enabled: false } }).errors;
     expect(errors[0]).toContain("hooks.enabled is not true");
   });
 
   it("fails per missing event/matcher/script combination, naming the fix", () => {
-    const config = JSON.parse(JSON.stringify(validConfig));
+    const config = machineryConfig();
     config.hooks.events.PostToolUse = config.hooks.events.PostToolUse.filter(
       (e) => e.matcher !== "Agent",
     );
@@ -122,7 +63,7 @@ describe("checkHookWiring", () => {
   });
 
   it("treats a disabled hook entry as missing", () => {
-    const config = JSON.parse(JSON.stringify(validConfig));
+    const config = machineryConfig();
     config.hooks.events.PreToolUse[0].hooks[0].enabled = false;
     const errors = wireOnly(config).errors;
     expect(errors[0]).toContain("PreToolUse/Bash");
@@ -189,6 +130,46 @@ describe("checkRoleFile", () => {
     expect(role.thoughtLevel).toBe("medium");
     rmSync(dir, { recursive: true, force: true });
   });
+
+  it("hard-fails a committed pin naming a known-stale, non-caching channel (review A3)", () => {
+    // The shape check is the only CI-visible layer, so `ollama/*` (the stale
+    // channel issue #125 was filed for) must fail here, not merely warn.
+    const dir = fixture();
+    const agents = join(dir, ".zcode", "agents");
+    const file = "implementer.md";
+    writeFileSync(join(agents, file), roleBody("ollama/glm-5.3-flash:cloud"));
+    const { errors } = checkRoleFile(file, agents);
+    expect(errors.join("\n")).toContain("known-stale, non-caching channel");
+    expect(errors.join("\n")).toContain("~/.zcode/agents/implementer.md");
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("rejects duplicated model: keys like duplicated thoughtLevel: keys (review A4)", () => {
+    // YAML resolves duplicate keys last-wins, so the pin is ambiguous —
+    // `model: inherit` hiding behind a later concrete pin must not pass.
+    const dir = fixture();
+    const agents = join(dir, ".zcode", "agents");
+    const file = "implementer.md";
+    const body = [
+      "---",
+      "name: implementer",
+      "tools: ['*']",
+      `model: inherit`,
+      `model: ${MODEL_PIN}`,
+      "thoughtLevel: high",
+      "---",
+      "",
+      "Body.",
+      "",
+    ].join("\n");
+    writeFileSync(join(agents, file), body);
+    // The pin record still resolves from the last occurrence for the
+    // downstream resolution layer; the ambiguity error is what gates.
+    const { errors } = checkRoleFile(file, agents);
+    expect(errors.some((e) => e.includes("2 model fields"))).toBe(true);
+    expect(errors.some((e) => e.includes("ambiguous"))).toBe(true);
+    rmSync(dir, { recursive: true, force: true });
+  });
 });
 
 describe("checkZcodeMachinery", () => {
@@ -209,17 +190,33 @@ describe("checkZcodeMachinery", () => {
     expect(errors.join("\n")).toContain("template-sync update");
     rmSync(dir, { recursive: true, force: true });
   });
+
+  it("fails on a falsy config parse (JSON null) instead of skipping the wiring check (review A2)", () => {
+    // JSON.parse("null") does not throw, so the catch branch never runs —
+    // the wiring check must still run (against {}) and produce the standard
+    // "hooks.enabled is not true" failure, never a silent pass.
+    const dir = mkdtempSync(join(tmpdir(), "zcode-null-config-"));
+    mkdirSync(join(dir, ".zcode"), { recursive: true });
+    writeFileSync(join(dir, ".zcode", "config.json"), "null");
+    const { errors } = checkZcodeMachinery(dir);
+    expect(errors.some((e) => e.includes("hooks.enabled is not true"))).toBe(true);
+    expect(errors.length).toBeGreaterThan(0);
+    rmSync(dir, { recursive: true, force: true });
+  });
 });
 
 describe("zcode-pin-check.mjs (preflight script)", () => {
-  /** Fake HOME whose ZCode client config declares an `ollama` provider that
-   * does NOT carry the fixture's model — a stale pin. */
-  function homeWithStaleOllama() {
+  /** Fake HOME whose ZCode client config declares a provider that does NOT
+   * carry the fixture's model — a non-resolving pin. The provider id is
+   * deliberately NOT a known-stale channel (`ollama` hard-fails the structural
+   * gate since review A3 on PR #127); this exercises the resolution-warning
+   * path only. */
+  function homeWithUnresolvedProvider() {
     const home = mkdtempSync(join(tmpdir(), "zcode-home-"));
     mkdirSync(join(home, ".zcode", "v2"), { recursive: true });
     writeFileSync(
       join(home, ".zcode", "v2", "config.json"),
-      JSON.stringify({ provider: { ollama: { models: { "glm-5.3:cloud": {} } } } }),
+      JSON.stringify({ provider: { localtest: { models: { "glm-5.3:cloud": {} } } } }),
     );
     return home;
   }
@@ -238,15 +235,27 @@ describe("zcode-pin-check.mjs (preflight script)", () => {
 
   it("exits 0 with a drift warning when the pin cannot resolve locally", () => {
     const dir = fixture({
-      implementer: roleBody("ollama/nonexistent-model:cloud"),
+      implementer: roleBody("localtest/nonexistent-model:cloud"),
     });
-    const home = homeWithStaleOllama();
+    const home = homeWithUnresolvedProvider();
     const r = runScript(dir, home);
     expect(r.status).toBe(0);
-    expect(r.stdout).toContain("⚠ implementer: ollama/nonexistent-model:cloud");
+    expect(r.stdout).toContain("⚠ implementer: localtest/nonexistent-model:cloud");
     expect(r.stdout).toContain("drift warning, not a gate failure");
     rmSync(dir, { recursive: true, force: true });
     rmSync(home, { recursive: true, force: true });
+  });
+
+  it("exits 1 on a committed pin naming the known-stale ollama channel (review A3)", () => {
+    // End-to-end: the structural gate (which CI runs via template-gate)
+    // hard-fails a committed stale-channel pin before resolution is even
+    // attempted — the regression class issue #125 was filed for is
+    // CI-visible, not only a local warning.
+    const dir = fixture({ implementer: roleBody("ollama/glm-5.3-flash:cloud") });
+    const r = runScript(dir);
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain("known-stale, non-caching channel");
+    rmSync(dir, { recursive: true, force: true });
   });
 
   it("exits 0 with a warning when there is no client config (CI-like)", () => {
@@ -267,7 +276,7 @@ describe("zcode-pin-check.mjs (preflight script)", () => {
   });
 
   it("exits 1 when the hook wiring is broken", () => {
-    const config = JSON.parse(JSON.stringify(validConfig));
+    const config = machineryConfig();
     config.hooks.enabled = false;
     const dir = fixture({ config });
     const r = runScript(dir);

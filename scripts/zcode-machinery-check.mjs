@@ -43,6 +43,14 @@ export const DISPATCHED_ROLES = new Set([
   "assistant-manager",
 ]);
 
+/** Provider ids of known-stale, non-caching channels a committed pin must
+ * not name (review A3 on PR #127): the shape check is the only CI-visible
+ * layer, and a committed stale-channel pin is always a mistake — the
+ * sanctioned per-fork mechanism is the user-scope override
+ * ~/.zcode/agents/<role>.md, which no static gate can see. Extend this set
+ * when the sanctioned channel changes again. */
+export const STALE_PROVIDER_IDS = new Set(["ollama"]);
+
 /** Hardcoded per-field frontmatter patterns — a RegExp built from the `key`
  * argument would trip semgrep's non-literal-regexp rule, and there are only
  * two fields to read. Line-bounded (`[ \t]*` + `(.*)`) so an empty field
@@ -144,6 +152,11 @@ export function checkRoleFile(file, rolesDir) {
 
   const modelValues = fieldValues(frontmatter, "model");
   const model = modelValues.at(-1) ?? null;
+  if (modelValues.length > 1) {
+    errors.push(
+      `${path}: ${modelValues.length} model fields — YAML resolves duplicate keys last-wins, so the pin is ambiguous; delete all but one`,
+    );
+  }
   if (model === null) {
     errors.push(
       `${path}: no model: pin — the template ships concrete pins on the caching channel (issue #125); ${fix}`,
@@ -155,6 +168,10 @@ export function checkRoleFile(file, rolesDir) {
   } else if (!model.includes("/")) {
     errors.push(
       `${path}: model pin "${model}" is a bare model id — ZCode resolves it against the session default provider, which no static gate can verify; pin it as <providerId>/<model>; ${fix}`,
+    );
+  } else if (STALE_PROVIDER_IDS.has(model.split("/")[0])) {
+    errors.push(
+      `${path}: model pin "${model}" names a known-stale, non-caching channel ("${model.split("/")[0]}") — the template pins the caching channel builtin:zai-start-plan/GLM-5.3-Flash (issue #125); re-pin it, or use the user-scope override ~/.zcode/agents/${file} which no sync touches`,
     );
   }
 
@@ -210,7 +227,11 @@ export function checkZcodeMachinery(rootDir) {
       `cannot read or parse ${configPath} (${error.code ?? error.message}) — the hook wiring that makes the guardrail and telemetry run is template-owned (.zcode/ in template-sync.json); restore it with 'bun run template-sync update'`,
     );
   }
-  if (config) errors.push(...checkHookWiring(config, configPath));
+  // A falsy parse result (JSON `null`, `false`, `0`, `""`) does not throw —
+  // run the wiring check against it anyway so it produces the standard
+  // "hooks.enabled is not true" failure instead of a silent pass (review A2
+  // on PR #127).
+  errors.push(...checkHookWiring(config ?? {}, configPath));
 
   const rolesDir = join(rootDir, ".zcode", "agents");
   const roles = [];
@@ -231,4 +252,30 @@ export function checkZcodeMachinery(rootDir) {
     if (role) roles.push(role);
   }
   return { errors, roles };
+}
+
+/**
+ * template-gate embedding (review B2 on PR #127): run the structural gate
+ * against `cwd`, log the verdict through the template-sync logger, and
+ * return pass/fail. Kept here — not in commands.mjs — so the CLI
+ * orchestration file stops growing with the machinery surface.
+ *
+ * @param {string} cwd repo root under gate (holds .zcode/)
+ * @param {import("@app/infra").Logger} log
+ * @returns {boolean} true when the machinery is intact
+ */
+export function runMachineryGate(cwd, log) {
+  const { errors, roles } = checkZcodeMachinery(cwd);
+  if (errors.length) {
+    log.error("zcode machinery gate failed", {
+      violations: errors,
+      hint: "the .zcode/ machinery is template-owned: restore with 'bun run template-sync update'; a fork re-pins a model via ~/.zcode/agents/<role>.md (user-scope override)",
+    });
+    return false;
+  }
+  log.info("zcode machinery gate passed", {
+    roles: roles.length,
+    wiring: ".zcode/config.json hook events present and enabled",
+  });
+  return true;
 }

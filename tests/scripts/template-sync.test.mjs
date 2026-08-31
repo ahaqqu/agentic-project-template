@@ -1,8 +1,12 @@
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, writeFileSync, rmSync, readFileSync, existsSync, mkdirSync } from "node:fs";
+import { mkdtempSync, writeFileSync, rmSync, readFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync, execSync } from "node:child_process";
+// The expected machinery shape has ONE test-side source of truth (review B3
+// on PR #127): the shared builder; the wrapper below still asserts the
+// builder's output through the gate so a divergence fails loudly.
+import { writeMachineryFixture, roleBody, MODEL_PIN } from "./helpers/zcode-machinery-fixture.mjs";
 import { checkZcodeMachinery } from "../../scripts/zcode-machinery-check.mjs";
 
 const ROOT = process.cwd();
@@ -55,33 +59,7 @@ function makeFork(upstream) {
 // (`check`) hard-fails without it, the way a fork that has not yet synced the
 // now-template-owned .zcode/ would fail.
 function writeZcodeMachinery(dir) {
-  mkdirSync(join(dir, ".zcode", "agents"), { recursive: true });
-  writeFileSync(
-    join(dir, ".zcode", "config.json"),
-    JSON.stringify({
-      hooks: {
-        enabled: true,
-        events: {
-          PreToolUse: [
-            { matcher: "Bash", hooks: [{ type: "process", command: "bun", args: ["scripts/iteration-guardrail/hook.mjs"], enabled: true }] },
-          ],
-          PostToolUse: [
-            { matcher: "Bash", hooks: [{ type: "process", command: "bun", args: ["scripts/iteration-guardrail/hook.mjs"], enabled: true }] },
-            { matcher: "Edit|Write", hooks: [{ type: "process", command: "bun", args: ["scripts/iteration-guardrail/hook.mjs"], enabled: true }] },
-            { matcher: "Agent", hooks: [{ type: "process", command: "bun", args: ["scripts/agent-usage-metadata/hook.mjs"], enabled: true }] },
-            { matcher: "TaskOutput", hooks: [{ type: "process", command: "bun", args: ["scripts/agent-usage-metadata/hook.mjs"], enabled: true }] },
-          ],
-          PostToolUseFailure: [
-            { matcher: "Bash", hooks: [{ type: "process", command: "bun", args: ["scripts/iteration-guardrail/hook.mjs"], enabled: true }] },
-          ],
-        },
-      },
-    }),
-  );
-  writeFileSync(
-    join(dir, ".zcode", "agents", "implementer.md"),
-    "---\nname: implementer\ntools: ['*']\nmodel: builtin:zai-start-plan/GLM-5.3-Flash\nthoughtLevel: high\n---\n\nBody.\n",
-  );
+  writeMachineryFixture(dir);
   expect(checkZcodeMachinery(dir).errors).toEqual([]);
 }
 
@@ -153,6 +131,47 @@ describe("template-sync CLI", () => {
     expect(() =>
       run(fork, "check", { TEMPLATE_SYNC_UPSTREAM: `${upstream}` }),
     ).toThrow();
+  });
+
+  it("check allows fork-added .zcode/ files but flags template-shipped ones (baseline-scoped drift, review A1)", () => {
+    // Issue #125 makes .zcode/ template-owned, but .zcode/ is also the
+    // documented fork extension point (.zcode/agents/README.md sanctions
+    // fork-added roles). Drift there is therefore baseline-scoped: only
+    // files the template baseline ships can be drift; fork additions —
+    // committed role files, local hook scripts, even untracked drafts —
+    // must keep the gate green (and unblock syncs).
+    writeMachineryFixture(upstream);
+    commit(upstream, "ship .zcode");
+    git(upstream, "tag v1.1.0");
+
+    // The fork opts .zcode/ into overwrite (what adopting issue #125 looks
+    // like) while carrying its own machinery — identical to the template's.
+    writeFileSync(`${fork}/template-sync.json`, JSON.stringify({
+      upstream: `${upstream}`,
+      overwrite: ["AGENTS.md", ".zcode"],
+      merge: ["README.md"],
+    }));
+    commit(fork, "opt .zcode into overwrite");
+    run(fork, "init", { TEMPLATE_SYNC_UPSTREAM: `${upstream}` });
+    run(fork, "update --ref=v1.1.0", { TEMPLATE_SYNC_UPSTREAM: `${upstream}` });
+    expect(run(fork, "check", { TEMPLATE_SYNC_UPSTREAM: `${upstream}` })).toContain("gate passed");
+
+    // A fork-added role (validated shape) and an untracked local hook are
+    // sanctioned: the drift gate ignores them, the machinery gate passes
+    // them (fork-added roles need a concrete pin, any valid thoughtLevel).
+    writeFileSync(`${fork}/.zcode/agents/fork-role.md`, roleBody(MODEL_PIN, "medium"));
+    commit(fork, "fork-added role");
+    writeFileSync(`${fork}/.zcode/local-hook.mjs`, "// fork-local hook draft\n");
+    expect(run(fork, "check", { TEMPLATE_SYNC_UPSTREAM: `${upstream}` })).toContain("gate passed");
+
+    // Modifying a file the template baseline ships is still drift.
+    writeFileSync(
+      `${fork}/.zcode/agents/implementer.md`,
+      `${roleBody(MODEL_PIN)}\n<!-- fork edit to a template-owned file -->\n`,
+    );
+    expect(() =>
+      run(fork, "check", { TEMPLATE_SYNC_UPSTREAM: `${upstream}` }),
+    ).toThrow(/gate failed/);
   });
 
   it("update merges upstream changes into template-owned files", () => {

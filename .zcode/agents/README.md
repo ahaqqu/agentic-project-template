@@ -57,6 +57,11 @@ ref — `bun run zcode:preflight` / `bun run template-gate`):
 - `lite` — no verified provider mapping; rejected.
 - A bare `<modelName>` — resolved against the session's default provider,
   which no static gate can verify; rejected.
+- A concrete ref naming a **known-stale, non-caching channel** (currently
+  `ollama/*`) — rejected in committed role files: the template pins the
+  caching channel, and the only sanctioned per-fork model mechanism is the
+  user-scope override, so a committed stale-channel pin is always a
+  regression (issue #125).
 
 ### Thought level
 
