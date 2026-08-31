@@ -12,7 +12,23 @@ export function validateFlag(name, value) {
 export function drift({ git, manifest }, baseline) {
   const paths = manifest.overwrite;
   if (!paths.length) return [];
-  const changed = git(["diff", "--name-status", baseline, "--", ...paths]);
+  // --no-renames (review A1 on PR #128): with rename detection on, a fork
+  // that `git mv`s a template-shipped overwrite file away emits
+  // `R100 old new`; taking the NEW path drops the drift entry and the gate
+  // goes green while a template-owned file was deleted-and-replaced. Without
+  // rename detection the same change reports `M old` + `D old` (old is in the
+  // baseline → drift) and `A new` (not in the baseline → sanctioned fork
+  // addition), which is exactly the intended adjudication. (quotePath is
+  // disabled globally in createGit — review A2 — so non-ASCII paths in this
+  // diff, the untracked listing, and the baseline tree all stay byte-exact.)
+  const changed = git([
+    "diff",
+    "--no-renames",
+    "--name-status",
+    baseline,
+    "--",
+    ...paths,
+  ]);
   const untracked = git([
     "ls-files",
     "--others",
@@ -36,13 +52,30 @@ export function drift({ git, manifest }, baseline) {
   // fork that extends `.agents/skills/`, `.github/workflows/`, `scripts/`,
   // or `.zcode/` with its own files keeps the gate green and unblocks syncs.
   // Template-shipped files the fork deleted still count as drift (D entries
-  // are in the baseline), and template modifications still drift forks —
-  // that is the point of overwrite ownership.
-  const inBaseline = (file) =>
-    git(["cat-file", "-e", `${baseline}:${file}`]).status === 0;
+  // are in the baseline, and A1's --no-renames keeps rename-produced deletes
+  // in the baseline too), and template modifications still drift forks —
+  // that is the point of overwrite ownership. When the template itself
+  // stops shipping a file (template-DELETE), the fork's copy is not in the
+  // new baseline and is adjudicated exactly like a fork addition: not drift,
+  // and no sync reconciles it. One `ls-tree -r` lists the baseline's
+  // overwrite-path files into a Set (review A4 on PR #128) instead of one
+  // `cat-file -e` spawn per drift entry.
+  const tree = git([
+    "ls-tree",
+    "-r",
+    "--name-only",
+    baseline,
+    "--",
+    ...paths,
+  ]);
+  const baselineFiles = new Set(
+    tree.status === 0 && tree.stdout
+      ? tree.stdout.split("\n").filter(Boolean)
+      : [],
+  );
   return [...lines, ...extra]
     .filter(Boolean)
-    .filter((entry) => inBaseline(entry.split("\t").pop()));
+    .filter((entry) => baselineFiles.has(entry.split("\t").pop()));
 }
 
 export function baseline({ gitOut, remote, state, log }) {
