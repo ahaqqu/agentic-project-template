@@ -9,13 +9,6 @@ export function validateFlag(name, value) {
   }
 }
 
-/** True when a file lives under `.zcode/` — the one overwrite directory that
- * is also a documented fork extension point (fork-added role files, local
- * hook scripts; see .zcode/agents/README.md). */
-function isZcodePath(file) {
-  return file === ".zcode" || file.startsWith(".zcode/");
-}
-
 export function drift({ git, manifest }, baseline) {
   const paths = manifest.overwrite;
   if (!paths.length) return [];
@@ -35,20 +28,21 @@ export function drift({ git, manifest }, baseline) {
     untracked.status === 0 && untracked.stdout
       ? untracked.stdout.trim().split("\n").map((p) => `A\t${p}`)
       : [];
-  // `.zcode/` drift is baseline-scoped (review A1 on PR #127): fork-added
-  // files under it are sanctioned, so only files the template baseline
-  // actually ships can be drift there — their modification or deletion.
-  // Fork-added role files and local hook scripts (committed or untracked)
-  // must not red the gate or block a sync. Every other overwrite path keeps
-  // whole-path ownership: any difference from the baseline is drift.
+  // Overwrite-path drift is baseline-scoped (generalizing review A1 on PR
+  // #127 from `.zcode/` to every overwrite path): only files the template
+  // baseline actually ships can be drift — their modification or deletion.
+  // Fork additions under overwrite directories (committed or untracked) are
+  // sanctioned extensions, not drift: the template never shipped them, so a
+  // fork that extends `.agents/skills/`, `.github/workflows/`, `scripts/`,
+  // or `.zcode/` with its own files keeps the gate green and unblocks syncs.
+  // Template-shipped files the fork deleted still count as drift (D entries
+  // are in the baseline), and template modifications still drift forks —
+  // that is the point of overwrite ownership.
   const inBaseline = (file) =>
     git(["cat-file", "-e", `${baseline}:${file}`]).status === 0;
   return [...lines, ...extra]
     .filter(Boolean)
-    .filter((entry) => {
-      const file = entry.split("\t").pop();
-      return !isZcodePath(file) || inBaseline(file);
-    });
+    .filter((entry) => inBaseline(entry.split("\t").pop()));
 }
 
 export function baseline({ gitOut, remote, state, log }) {
