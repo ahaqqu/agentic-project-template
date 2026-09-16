@@ -35,16 +35,16 @@
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",
     "@fast-check/vitest": "0.4.1",
-    "@playwright/test": "1.62.1",
+    "@playwright/test": "1.63.0",
     "@size-limit/file": "13.0.3",
-    "@types/node": "26.4.1",
+    "@types/node": "26.5.0",
     "@vitest/coverage-v8": "4.1.11",
     "fast-check": "4.9.0",
-    "playwright-bdd": "9.2.0",
+    "playwright-bdd": "9.2.1",
     "size-limit": "13.0.3",
     "typescript": "7.0.2",
     "vitest": "4.1.11",
-    "wrangler": "4.128.0"
+    "wrangler": "4.130.0"
   },
   "size-limit": [
     {
