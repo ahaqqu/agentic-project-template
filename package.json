@@ -38,7 +38,7 @@
     "@playwright/test": "1.62.1",
     "@size-limit/file": "13.0.3",
     "@types/node": "26.4.1",
-    "@vitest/coverage-v8": "4.1.11",
+    "@vitest/coverage-v8": "5.0.0",
     "fast-check": "4.9.0",
     "playwright-bdd": "9.2.0",
     "size-limit": "13.0.3",
