@@ -14,15 +14,15 @@
     "@app/local-first": "workspace:*",
     "@sentry/react": "10.73.0",
     "@tanstack/react-query": "5.102.8",
-    "@tanstack/react-router": "1.170.32",
+    "@tanstack/react-router": "1.170.33",
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "valibot": "1.4.2"
+    "valibot": "1.5.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "4.3.3",
     "@types/react": "19.2.18",
-    "@types/react-dom": "19.2.5",
+    "@types/react-dom": "19.2.7",
     "@vitejs/plugin-react": "6.1.1",
     "tailwindcss": "4.3.3",
     "typescript": "7.0.2",
