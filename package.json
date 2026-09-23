@@ -34,17 +34,17 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",
-    "@fast-check/vitest": "0.4.1",
+    "@fast-check/vitest": "0.5.0",
     "@playwright/test": "1.63.0",
     "@size-limit/file": "13.0.3",
-    "@types/node": "26.5.0",
+    "@types/node": "26.6.1",
     "@vitest/coverage-v8": "4.1.11",
-    "fast-check": "4.9.0",
+    "fast-check": "4.10.1",
     "playwright-bdd": "9.2.1",
     "size-limit": "13.0.3",
     "typescript": "7.0.2",
     "vitest": "4.1.11",
-    "wrangler": "4.130.0"
+    "wrangler": "4.132.0"
   },
   "size-limit": [
     {
