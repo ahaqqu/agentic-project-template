@@ -37,14 +37,14 @@
     "@fast-check/vitest": "0.5.0",
     "@playwright/test": "1.63.0",
     "@size-limit/file": "13.0.3",
-    "@types/node": "26.6.1",
+    "@types/node": "26.6.2",
     "@vitest/coverage-v8": "4.1.11",
-    "fast-check": "4.10.1",
+    "fast-check": "4.10.2",
     "playwright-bdd": "9.2.1",
     "size-limit": "13.0.3",
     "typescript": "7.0.2",
     "vitest": "4.1.11",
-    "wrangler": "4.132.0"
+    "wrangler": "4.137.0"
   },
   "size-limit": [
     {
