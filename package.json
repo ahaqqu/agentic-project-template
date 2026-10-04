@@ -41,7 +41,7 @@
     "@vitest/coverage-v8": "4.1.11",
     "fast-check": "4.10.2",
     "playwright-bdd": "9.2.1",
-    "size-limit": "13.0.3",
+    "size-limit": "14.0.1",
     "typescript": "7.0.2",
     "vitest": "4.1.11",
     "wrangler": "4.137.0"
