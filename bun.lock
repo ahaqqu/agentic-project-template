@@ -8,7 +8,7 @@
         "@axe-core/playwright": "4.13.0",
         "@fast-check/vitest": "0.5.0",
         "@playwright/test": "1.63.0",
-        "@size-limit/file": "13.0.3",
+        "@size-limit/file": "14.0.1",
         "@types/node": "26.6.2",
         "@vitest/coverage-v8": "4.1.11",
         "fast-check": "4.10.2",
@@ -609,7 +609,7 @@
 
     "@sindresorhus/is": ["@sindresorhus/is@7.2.0", "", {}, "sha512-P1Cz1dWaFfR4IR+U13mqqiGsLFf1KbayybWwdd2vfctdV6hDpUkgCY0nKOLLTMSoRd/jJNjtbqzf13K8DCCXQw=="],
 
-    "@size-limit/file": ["@size-limit/file@13.0.3", "", { "peerDependencies": { "size-limit": "13.0.3" } }, "sha512-PWTITIXH5p9aGIf6qq2Fruihn/b9nBQyfkyoAyb6DzFJgS1Ek9MSPJYKxKFLO8jdo0aqSgBPd3sevbS6PyBiJw=="],
+    "@size-limit/file": ["@size-limit/file@14.0.1", "", { "peerDependencies": { "size-limit": "14.0.1" } }, "sha512-F1qJqAPcoK+V9KhLHsKLENwaoqdFfXL4OnGNV9kXI9VaWAOu4ykdyGHR1AOd8ZXcnyeA45PBROSmmKCajfc1hA=="],
 
     "@speed-highlight/core": ["@speed-highlight/core@1.2.17", "", {}, "sha512-Z92FwKpCtfaW1V0jTU/fh3QzYEZN8wDwrzRIBoADCJfn4mJCNcJN/XegifX7BDrQ8/h9Xh/JnbyMchL0FqXrkg=="],
 
