@@ -1,7 +1,8 @@
 name: Template Sync
+# No schedule: this repository is the source template, which has no upstream,
+# and it is retired. Forks that copy this workflow should add their own
+# schedule (the `TEMPLATE_SYNC_UPSTREAM` guard still skips it when unset).
 on:
-  schedule:
-    - cron: "0 3 * * 1"
   workflow_dispatch:
 
 permissions:

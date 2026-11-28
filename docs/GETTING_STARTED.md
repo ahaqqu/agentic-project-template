@@ -53,7 +53,7 @@ bun run template-sync update   # merge latest template release (--ref=X to pin)
 bun run template-sync finish   # complete a sync after resolving conflicts
 ```
 
-The `template-sync` workflow (`.github/workflows/template-sync.yml`) opens a sync PR weekly. It is skipped in the source template, which has no upstream: set the `TEMPLATE_SYNC_UPSTREAM` repository variable in a fork to enable it, and the same variable selects a different upstream URL. If it reports conflicts, check out the `template-sync` branch, resolve them, then run `bun run template-sync finish`. Do not edit `template-sync.json` in a fork: it is template-owned and the gate will flag any drift. Dependency auto-merge is event-driven per Dependabot PR (patch/minor only); there is no scheduled polling workflow.
+The `template-sync` workflow (`.github/workflows/template-sync.yml`) opens a sync PR when you schedule it; the source template ships it with `workflow_dispatch` only, so a fork adds its own `schedule:` if it wants a weekly run. It is skipped in the source template, which has no upstream: set the `TEMPLATE_SYNC_UPSTREAM` repository variable in a fork to enable it, and the same variable selects a different upstream URL. If it reports conflicts, check out the `template-sync` branch, resolve them, then run `bun run template-sync finish`. Do not edit `template-sync.json` in a fork: it is template-owned and the gate will flag any drift. Dependency auto-merge is event-driven per Dependabot PR (patch/minor only); there is no scheduled polling workflow. The retired source template ships no `dependabot.yml`, so a new project adds its own update schedule and enables alerts as a repository setting.
 
 ## Commands
 
