@@ -17,6 +17,10 @@ concurrency:
 
 jobs:
   sync:
+    # The source template has no upstream to pull from. Downstream forks must
+    # set TEMPLATE_SYNC_UPSTREAM explicitly; an unset variable is a skip, not a
+    # weekly failing self-sync.
+    if: ${{ vars.TEMPLATE_SYNC_UPSTREAM != '' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
