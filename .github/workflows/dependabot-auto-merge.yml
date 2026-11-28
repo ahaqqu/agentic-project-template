@@ -21,12 +21,72 @@ jobs:
 
       # Event-driven: the workflow runs once per Dependabot PR instead of a
       # scheduled poll burning runs for every open PR. Auto-merge queues the
-      # squash merge and waits for the PR's required checks; only patch/minor
-      # updates qualify, so major, downgrade, pre-release, and grouped updates
-      # stay for human review. Requires "Allow auto-merge" in repository
-      # settings (Settings -> General -> Pull Requests).
+      # squash merge and waits for the PR's required checks. Requires "Allow
+      # auto-merge" in repository settings (Settings -> General -> Pull
+      # Requests).
       - name: Enable auto-merge
         if: steps.metadata.outputs.update-type == 'version-update:semver-patch' || steps.metadata.outputs.update-type == 'version-update:semver-minor'
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Grouped-update PRs ("bump the minor-patch group with N updates") have no
+      # metadata update-type, so fetch-metadata cannot classify them. Keep the
+      # previous capability without polling: every row of the PR body's update
+      # table must classify as minor/patch with no pre-release. One major,
+      # downgrade, pre-release, or unparseable row leaves the whole group for
+      # human review.
+      - name: Classify a grouped update
+        id: group
+        if: steps.metadata.outputs.update-type == ''
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          semver_kind() {
+            local o n o1 o2 o3 n1 n2 n3
+            o=${1#v}; n=${2#v}
+            o=${o%%-*}; n=${n%%-*}
+            o1=${o%%.*};  o=${o#*.}; o2=${o%%.*}; o=${o#*.}; o3=${o%%.*}
+            n1=${n%%.*};  n=${n#*.}; n2=${n%%.*}; n=${n#*.}; n3=${n%%.*}
+            case "$o1" in *[!0-9]*|'') o1=0;; esac
+            case "$o2" in *[!0-9]*|'') o2=0;; esac
+            case "$o3" in *[!0-9]*|'') o3=0;; esac
+            case "$n1" in *[!0-9]*|'') n1=0;; esac
+            case "$n2" in *[!0-9]*|'') n2=0;; esac
+            case "$n3" in *[!0-9]*|'') n3=0;; esac
+            if   [ "$n1" -ne "$o1" ]; then [ "$n1" -gt "$o1" ] && echo major || echo downgrade
+            elif [ "$n2" -ne "$o2" ]; then [ "$n2" -gt "$o2" ] && echo minor || echo downgrade
+            elif [ "$n3" -ne "$o3" ]; then [ "$n3" -gt "$o3" ] && echo patch || echo downgrade
+            else echo unchanged; fi
+          }
+
+          # Each table row carries the package and its `From`/`To` versions in
+          # backticks; a row without exactly two version cells is unparseable.
+          rows=$(printf '%s\n' "${PR_BODY}" \
+            | grep -E '^\| \[' \
+            | sed -E 's/.*`([^`]+)`.+`([^`]+)`.*/\1 \2/')
+          verdict=auto
+          if [ -z "${rows}" ]; then
+            verdict=no-table
+          else
+            while read -r from to; do
+              [ -n "${from}" ] || continue
+              if [ -z "${to}" ]; then verdict=unparseable-row; break; fi
+              kind=$(semver_kind "${from}" "${to}")
+              case "${from}" in *-*) kind=prerelease;; esac
+              case "${to}" in *-*) kind=prerelease;; esac
+              case "${kind}" in
+                patch|minor) ;;
+                *) verdict="${kind} ${from}->${to}"; break ;;
+              esac
+            done <<< "${rows}"
+          fi
+          echo "verdict=${verdict}" >>"${GITHUB_OUTPUT}"
+          echo "grouped-update verdict: ${verdict}"
+
+      - name: Enable auto-merge for a grouped update
+        if: steps.group.outputs.verdict == 'auto'
         run: gh pr merge --auto --squash "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
