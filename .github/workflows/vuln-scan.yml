@@ -1,7 +1,8 @@
 name: Vulnerability scan
+# No schedule: this template is retired, so the daily OSV sweep would only
+# produce red runs nobody acts on. The job stays dispatchable for anyone who
+# revives the template or wants the advisory list on demand.
 on:
-  schedule:
-    - cron: '0 4 * * *'
   workflow_dispatch:
 
 jobs:
